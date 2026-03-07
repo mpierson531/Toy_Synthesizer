@@ -1,0 +1,101 @@
+﻿using System;
+
+using FontStashSharp;
+
+using GeoLib.GeoGraphics.UI.Widgets;
+using GeoLib.GeoMaths;
+using GeoLib.GeoUtils.Collections;
+using GeoLib.GeoUtils.Converters;
+
+namespace Toy_Synthesizer.Game.UI
+{
+    public class DropDownListView : DropDownWidget
+    {
+        private DropDownListAdapter dropDownListAdapter;
+
+        public int CurrentIndex
+        {
+            get => dropDownListAdapter.CurrentIndex;
+        }
+
+        public object CurrentValue
+        {
+            get => dropDownListAdapter.CurrentValue;
+            set => dropDownListAdapter.CurrentValue = value;
+        }
+
+        public DropDownListAdapter.ValueChangedDelegate OnValueChanged
+        {
+            get => dropDownListAdapter.OnValueChanged;
+            set => dropDownListAdapter.OnValueChanged = value;
+        }
+
+        public DropDownListView(Vec2f position, Vec2f size,
+                                Func<Vec2f, Vec2f, Button> coverButtonProvider,
+                                Func<string, int, Vec2f, Vec2f, Button> childProvider,
+                                Func<Vec2f, Vec2f, GroupWidget> groupProvider,
+                                Vec2fValue dropDownPosition,
+                                Vec2fValue? dropDownMaxSize,
+                                Vec2fValue buttonStartPosition,
+                                Vec2fValue buttonSize,
+                                Vec2fValue buttonSpacing,
+                                Vec2fValue? additionalDropDownSize,
+                                ViewableList<object> values, int defaultIndex,
+                                ToStringConverter toStringProvider)
+            : base(position, size, GetAdapterProvider(coverButtonProvider: coverButtonProvider,
+                                           childProvider: childProvider,
+                                           groupProvider: groupProvider,
+                                           dropDownPosition: dropDownPosition,
+                                           dropDownMaxSize: dropDownMaxSize,
+                                           buttonStartPosition: buttonStartPosition,
+                                           buttonSize: buttonSize,
+                                           buttonSpacing: buttonSpacing,
+                                           additionalDropDownSize: additionalDropDownSize,
+                                           values: values,
+                                           defaultIndex: defaultIndex,
+                                           toStringProvider: toStringProvider))
+        {
+
+        }
+
+        protected override void AdapterInitialized(DropDownAdapter adapter)
+        {
+            this.dropDownListAdapter = (DropDownListAdapter)adapter;
+        }
+
+        public void SetFont(DynamicSpriteFont font)
+        {
+            dropDownListAdapter.SetFont(font);
+        }
+
+        private static Func<DropDownWidget, DropDownAdapter> GetAdapterProvider(Func<Vec2f, Vec2f, Button> coverButtonProvider,
+                                                                          Func<string, int, Vec2f, Vec2f, Button> childProvider,
+                                                                          Func<Vec2f, Vec2f, GroupWidget> groupProvider,
+                                                                          Vec2fValue dropDownPosition,
+                                                                          Vec2fValue? dropDownMaxSize,
+                                                                          Vec2fValue buttonStartPosition,
+                                                                          Vec2fValue buttonSize,
+                                                                          Vec2fValue buttonSpacing,
+                                                                          Vec2fValue? additionalDropDownSize,
+                                                                          ViewableList<object> values, int defaultIndex,
+                                                                          ToStringConverter toStringProvider)
+        {
+            return delegate (DropDownWidget dropDown)
+            {
+                return new DropDownListAdapter(dropDown,
+                                           coverButtonProvider: coverButtonProvider,
+                                           childProvider: childProvider,
+                                           groupProvider: groupProvider,
+                                           dropDownPosition: dropDownPosition,
+                                           dropDownMaxSize: dropDownMaxSize,
+                                           buttonStartPosition: buttonStartPosition,
+                                           buttonSize: buttonSize,
+                                           buttonSpacing: buttonSpacing,
+                                           additionalDropDownSize: additionalDropDownSize,
+                                           values: values,
+                                           defaultIndex: defaultIndex,
+                                           toStringProvider: toStringProvider);
+            };
+        }
+    }
+}

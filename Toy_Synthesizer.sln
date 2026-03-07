@@ -1,0 +1,51 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36717.8
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Toy_Synthesizer", "Toy_Synthesizer\Toy_Synthesizer.csproj", "{87C05E7C-7C9B-44BD-A843-040EAADD4F31}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GeoLib", "..\Core.GeoLib\Core.GeoLib\GeoLib.csproj", "{28DA67FF-98EA-BE3C-C7F4-6B4E467068C4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BuildInfoGenerator", "BuildInfoGenerator\BuildInfoGenerator.csproj", "{C376C69B-AE55-4FE4-AA5F-4BD916E1DF46}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		DX_Debug|Any CPU = DX_Debug|Any CPU
+		DX_Release|Any CPU = DX_Release|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{87C05E7C-7C9B-44BD-A843-040EAADD4F31}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{87C05E7C-7C9B-44BD-A843-040EAADD4F31}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{87C05E7C-7C9B-44BD-A843-040EAADD4F31}.DX_Debug|Any CPU.ActiveCfg = DX_Debug|Any CPU
+		{87C05E7C-7C9B-44BD-A843-040EAADD4F31}.DX_Debug|Any CPU.Build.0 = DX_Debug|Any CPU
+		{87C05E7C-7C9B-44BD-A843-040EAADD4F31}.DX_Release|Any CPU.ActiveCfg = DX_Release|Any CPU
+		{87C05E7C-7C9B-44BD-A843-040EAADD4F31}.DX_Release|Any CPU.Build.0 = DX_Release|Any CPU
+		{87C05E7C-7C9B-44BD-A843-040EAADD4F31}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{87C05E7C-7C9B-44BD-A843-040EAADD4F31}.Release|Any CPU.Build.0 = Release|Any CPU
+		{28DA67FF-98EA-BE3C-C7F4-6B4E467068C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{28DA67FF-98EA-BE3C-C7F4-6B4E467068C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{28DA67FF-98EA-BE3C-C7F4-6B4E467068C4}.DX_Debug|Any CPU.ActiveCfg = DX_Debug|Any CPU
+		{28DA67FF-98EA-BE3C-C7F4-6B4E467068C4}.DX_Debug|Any CPU.Build.0 = DX_Debug|Any CPU
+		{28DA67FF-98EA-BE3C-C7F4-6B4E467068C4}.DX_Release|Any CPU.ActiveCfg = DX_Release|Any CPU
+		{28DA67FF-98EA-BE3C-C7F4-6B4E467068C4}.DX_Release|Any CPU.Build.0 = DX_Release|Any CPU
+		{28DA67FF-98EA-BE3C-C7F4-6B4E467068C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{28DA67FF-98EA-BE3C-C7F4-6B4E467068C4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C376C69B-AE55-4FE4-AA5F-4BD916E1DF46}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C376C69B-AE55-4FE4-AA5F-4BD916E1DF46}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C376C69B-AE55-4FE4-AA5F-4BD916E1DF46}.DX_Debug|Any CPU.ActiveCfg = Release|Any CPU
+		{C376C69B-AE55-4FE4-AA5F-4BD916E1DF46}.DX_Debug|Any CPU.Build.0 = Release|Any CPU
+		{C376C69B-AE55-4FE4-AA5F-4BD916E1DF46}.DX_Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C376C69B-AE55-4FE4-AA5F-4BD916E1DF46}.DX_Release|Any CPU.Build.0 = Release|Any CPU
+		{C376C69B-AE55-4FE4-AA5F-4BD916E1DF46}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C376C69B-AE55-4FE4-AA5F-4BD916E1DF46}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {69554A79-8F1C-433A-A178-1386E7FBD419}
+	EndGlobalSection
+EndGlobal
