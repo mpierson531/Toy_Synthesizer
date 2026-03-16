@@ -27,12 +27,12 @@ using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 using GeoLib.GeoUtils.Pooling;
 
-using Toy_Synthesizer.Game.Synthesizer;
 using Toy_Synthesizer.Game.UI;
-using System.Collections.Generic;
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
 
 namespace Toy_Synthesizer.Game
 {
+    // TODO: Implement multiple value storage/bit ops in the raw value storage types in CommonUtils.RawValueStorage.
     public sealed class Game : BaseScreen, IInputProcessor
     {
         // This should not interact with setting render targets at all.
@@ -69,7 +69,11 @@ namespace Toy_Synthesizer.Game
         private readonly MessagePackSerializerOptions readableSerializerOptions;
         private readonly MessagePackSerializerOptions compactSerializerOptions;
 
-        private Synthesizer.Synthesizer synthesizer;
+        private AudioBackend audioBackend;
+
+        private Synthesizer.Backend.PolyphonicSynthesizer synthesizer;
+        private Synthesizer.Frontend.Frontend synthesizerFrontend;
+        private DSP dsp;
 
         private readonly Stage uiStage;
 
@@ -169,9 +173,24 @@ namespace Toy_Synthesizer.Game
             return "Config";
         }
 
-        public Synthesizer.Synthesizer Synthesizer
+        public AudioBackend AudioBackend
+        {
+            get => audioBackend;
+        }
+
+        public Synthesizer.Backend.PolyphonicSynthesizer Synthesizer
         {
             get => synthesizer;
+        }
+
+        public Synthesizer.Frontend.Frontend SynthesizerFrontend
+        {
+            get => synthesizerFrontend;
+        }
+
+        public DSP DSP
+        {
+            get => dsp;
         }
 
         public Game(Geo geo)
@@ -209,6 +228,25 @@ namespace Toy_Synthesizer.Game
 
         protected override void InitializeInternal()
         {
+            /*unsafe
+            {
+                Console.WriteLine(sizeof(DSPCommand));
+
+                Console.WriteLine();
+            }
+            var bufferStorage = CommonUtils.RawValueStorage.ValueStorageUtils.FromBuffer<double, CommonUtils.RawValueStorage.RawValueStorage_64B>([0, 1.894512389f, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+            double[] floats = new double[CommonUtils.RawValueStorage.RawValueStorage_64B.STORAGE_SIZE / sizeof(double)];
+
+            bufferStorage.ReadBuffer<double>(floats, out int realCount);
+
+            for (int index = 0; index < realCount; index++)
+            {
+                Console.WriteLine(floats[index]);
+            }
+
+            Geo.Exit();*/
+
             InitLogManager();
 
             MessagePackSerializer.DefaultOptions = MessagePackSerializerOptions.Standard.WithResolver(GeoLib.GeoSerialization.GeoSerializationResolver.Readable);
@@ -253,9 +291,15 @@ namespace Toy_Synthesizer.Game
             Geo.Display.Resize(TargetWindowSize);
             isInitializedInternally = true;
 
-            synthesizer = new Synthesizer.Synthesizer(this);
+            dsp = new DSP(AudioBackend.SAMPLE_RATE);
 
-            synthesizer.Frontend.Init(uiStage);
+            audioBackend = new AudioBackend(this, dsp);
+
+            synthesizer = new Synthesizer.Backend.PolyphonicSynthesizer(AudioBackend.SAMPLE_RATE);
+
+            synthesizerFrontend = new Synthesizer.Frontend.Frontend(this);
+
+            dsp.AddAudioSource(synthesizer);
 
             if (OnInitialized is not null)
             {
@@ -314,8 +358,6 @@ namespace Toy_Synthesizer.Game
 
         public sealed override void Update(float delta)
         {
-            synthesizer.Update(delta);
-
             uiStage.Update(delta);
         }
 
@@ -637,7 +679,7 @@ namespace Toy_Synthesizer.Game
                 return true;
             }
 
-            if (synthesizer.Frontend.KeyDown(key, isRepeat, holdTime))
+            if (SynthesizerFrontend.KeyDown(key, isRepeat, holdTime))
             {
                 return true;
             }
@@ -652,7 +694,7 @@ namespace Toy_Synthesizer.Game
                 return true;
             }
 
-            if (synthesizer.Frontend.KeyUp(key))
+            if (SynthesizerFrontend.KeyUp(key))
             {
                 return true;
             }
@@ -667,7 +709,7 @@ namespace Toy_Synthesizer.Game
                 return true;
             }
 
-            if (synthesizer.Frontend.MouseDown(x, y, button))
+            if (SynthesizerFrontend.MouseDown(x, y, button))
             {
                 return true;
             }
@@ -682,7 +724,7 @@ namespace Toy_Synthesizer.Game
                 return true;
             }
 
-            if (synthesizer.Frontend.MouseUp(x, y, button))
+            if (SynthesizerFrontend.MouseUp(x, y, button))
             {
                 return true;
             }
@@ -697,7 +739,7 @@ namespace Toy_Synthesizer.Game
                 return true;
             }
 
-            if (synthesizer.Frontend.MouseMoved(previousX, previousY, x, y))
+            if (SynthesizerFrontend.MouseMoved(previousX, previousY, x, y))
             {
                 return true;
             }
@@ -712,7 +754,7 @@ namespace Toy_Synthesizer.Game
                 return true;
             }
 
-            if (synthesizer.Frontend.MouseDragged(previousX, previousY, x, y, button))
+            if (SynthesizerFrontend.MouseDragged(previousX, previousY, x, y, button))
             {
                 return true;
             }
@@ -727,7 +769,7 @@ namespace Toy_Synthesizer.Game
                 return true;
             }
 
-            if (synthesizer.Frontend.MouseScrolled(x, y, verticalAmount, horizontalAmount))
+            if (SynthesizerFrontend.MouseScrolled(x, y, verticalAmount, horizontalAmount))
             {
                 return true;
             }
@@ -737,7 +779,7 @@ namespace Toy_Synthesizer.Game
 
         public bool GamePadDown(Buttons button, bool isRepeat, float holdTime)
         {
-            if (synthesizer.Frontend.GamePadDown(button, isRepeat, holdTime))
+            if (SynthesizerFrontend.GamePadDown(button, isRepeat, holdTime))
             {
                 return true;
             }
@@ -747,7 +789,7 @@ namespace Toy_Synthesizer.Game
 
         public bool GamePadUp(Buttons button)
         {
-            if (synthesizer.Frontend.GamePadUp(button))
+            if (SynthesizerFrontend.GamePadUp(button))
             {
                 return true;
             }
@@ -757,7 +799,7 @@ namespace Toy_Synthesizer.Game
 
         public bool GamePadSticks(bool leftRepeat, bool rightRepeat, float lx, float ly, float rx, float ry)
         {
-            if (synthesizer.Frontend.GamePadSticks(leftRepeat, rightRepeat, lx, ly, rx, ry))
+            if (SynthesizerFrontend.GamePadSticks(leftRepeat, rightRepeat, lx, ly, rx, ry))
             {
                 return true;
             }
@@ -767,7 +809,7 @@ namespace Toy_Synthesizer.Game
 
         public bool GamePadTriggers(bool leftRepeat, bool rightRepeat, float left, float right)
         {
-            if (synthesizer.Frontend.GamePadTriggers(leftRepeat, rightRepeat, left, right))
+            if (SynthesizerFrontend.GamePadTriggers(leftRepeat, rightRepeat, left, right))
             {
                 return true;
             }
@@ -789,7 +831,7 @@ namespace Toy_Synthesizer.Game
 
             GenerateNewFontAndSetStageSize(previousSize, newSize);
 
-            synthesizer.Frontend.WindowResized(width, height);
+            SynthesizerFrontend.WindowResized(width, height);
 
             GC.Collect();// when resized, slight hitches may already be expected; might as well collect here to minimize memory usage
         }
@@ -864,7 +906,7 @@ namespace Toy_Synthesizer.Game
 
             uiStage.Dispose();
 
-            synthesizer.Dispose();
+            audioBackend.Dispose();
         }
 
         public override void Activate()

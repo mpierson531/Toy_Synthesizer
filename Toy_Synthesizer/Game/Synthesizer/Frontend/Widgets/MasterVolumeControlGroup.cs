@@ -13,14 +13,14 @@ using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
 using Toy_Synthesizer.Game.Synthesizer.Backend;
-using Toy_Synthesizer.Game.Synthesizer.Frontend;
 using Toy_Synthesizer.Game.UI;
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
     public class MasterVolumeControlGroup : GroupWidget
     {
-        private Backend.PolyphonicSynthesizer synthesizer;
+        private DSP dsp;
 
         private Slider volumeSlider;
         private TextField volumeSliderDisplayTextField;
@@ -36,7 +36,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                    positionChildren: false,
                    sizeChildren: false)
         {
-            this.synthesizer = uiManager.Game.Synthesizer.Backend.PolyphonicSynthesizer;
+            dsp = uiManager.Game.DSP;
 
             Style.RenderData.SetColor(uiManager.BackgroundedLabelTint);
 
@@ -48,7 +48,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             InitWidgets();
 
-            synthesizer.OnMasterVolumeChanged += Synthesizer_OnMasterVolumeChanged;
+            dsp.OnMasterVolumeChanged += Synthesizer_OnMasterVolumeChanged;
         }
 
         private void InitWidgets()
@@ -105,7 +105,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void ResetButton_OnClick()
         {
-            synthesizer.MasterVolume = PolyphonicSynthesizer.DEFAULT_MASTER_VOLUME;
+            dsp.MasterVolume = DSP.DEFAULT_MASTER_VOLUME;
         }
 
         private void SetVolume(double newValue_Percentage, bool setSlider, bool setDisplay)
@@ -119,7 +119,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             double newValue_Scalar = GeoMath.PercentToScalar(newValue_Percentage);
 
-            synthesizer.MasterVolume = newValue_Scalar;
+            dsp.MasterVolume = newValue_Scalar;
 
             if (setSlider)
             {
@@ -138,17 +138,17 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             settingValueFromSlider = true;
 
-            volumeSlider.CurrentValue = (float)GeoMath.ScalarToPercent(synthesizer.MasterVolume);
+            volumeSlider.CurrentValue = (float)GeoMath.ScalarToPercent(dsp.MasterVolume);
         }
 
         private void SetDisplayTextField()
         {
-            volumeSliderDisplayTextField.Text = ((float)GeoMath.ScalarToPercent(synthesizer.MasterVolume)).ToString();
+            volumeSliderDisplayTextField.Text = ((float)GeoMath.ScalarToPercent(dsp.MasterVolume)).ToString();
         }
 
         private string GetUIXml()
         {
-            NumberRange<double> masterVolumePercentageRange = NumberRangeUtils.ScalarToPercent(PolyphonicSynthesizer.MasterVolumeRange);
+            NumberRange<double> masterVolumePercentageRange = NumberRangeUtils.ScalarToPercent(DSP.MasterVolumeRange);
 
             return
             $@"<Layout>
@@ -172,7 +172,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Size=""(65%, 40%)""
                  NumberMinValue=""{masterVolumePercentageRange.Min}""
                  NumberMaxValue=""{masterVolumePercentageRange.Max}""
-                 NumberDefaultValue=""{PolyphonicSynthesizer.DEFAULT_MASTER_VOLUME}""
+                 NumberDefaultValue=""{DSP.DEFAULT_MASTER_VOLUME}""
                  DragIncrement=""1.0""
                  Name=""{VOLUME_SLIDER_NAME}""/>
 

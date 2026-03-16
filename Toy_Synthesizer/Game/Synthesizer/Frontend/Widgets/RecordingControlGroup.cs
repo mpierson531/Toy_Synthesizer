@@ -15,10 +15,10 @@ using GeoLib.GeoUtils.Collections;
 
 using Microsoft.Xna.Framework;
 
-using Toy_Synthesizer.Game.Synthesizer.Backend;
-using Toy_Synthesizer.Game.Synthesizer.Backend.BuiltinAudioSources;
-using Toy_Synthesizer.Game.Synthesizer.Frontend;
 using Toy_Synthesizer.Game.UI;
+using Toy_Synthesizer.Game.Synthesizer.Backend;
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
+using Toy_Synthesizer.Game.DigitalSignalProcessing.BuiltinAudioSources;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
@@ -26,7 +26,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
     {
         private UIManager uiManager;
 
-        private Backend.PolyphonicSynthesizer synthesizer;
+        private DSP dsp;
 
         private readonly RecordedAudioSource recordedAudioSource;
 
@@ -49,9 +49,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             this.uiManager = uiManager;
 
-            this.synthesizer = uiManager.Game.Synthesizer.Backend.PolyphonicSynthesizer;
+            dsp = uiManager.Game.DSP;
 
-            this.recordedAudioSource = new RecordedAudioSource(synthesizer);
+            recordedAudioSource = new RecordedAudioSource(dsp);
 
             isPlaying = false;
 
@@ -83,13 +83,13 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void PlayPauseButton_OnClick()
         {
-            Utils.Assert(!synthesizer.IsRecordingAudio);
+            Utils.Assert(!dsp.IsRecordingAudio);
 
             if (isPlaying)
             {
                 isPlaying = false;
 
-                synthesizer.RemoveAudioSource(recordedAudioSource);
+                dsp.RemoveAudioSource(recordedAudioSource);
 
                 playPauseButton.Style = uiManager.GetStyle<ImageButton.ImageButtonStyle>("PlayButtonStyle");
 
@@ -100,7 +100,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             {
                 isPlaying = true;
 
-                synthesizer.AddAudioSource(recordedAudioSource);
+                dsp.AddAudioSource(recordedAudioSource);
 
                 playPauseButton.Style = uiManager.GetStyle<ImageButton.ImageButtonStyle>("PauseButtonStyle");
 
@@ -110,11 +110,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void RecordButton_OnClick()
         {
-            if (synthesizer.IsRecordingAudio)
+            if (dsp.IsRecordingAudio)
             {
                 isRecording = false;
 
-                synthesizer.StopRecordingAudio();
+                dsp.StopRecordingAudio();
 
                 recordButton.Style = uiManager.GetStyle<ImageButton.ImageButtonStyle>("RecordButtonStyle");
 
@@ -128,7 +128,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             {
                 isRecording = true;
 
-                synthesizer.BeginRecordingAudio();
+                dsp.BeginRecordingAudio();
 
                 recordButton.Style = uiManager.GetStyle<ImageButton.ImageButtonStyle>("StopButtonStyle");
 
@@ -141,7 +141,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void TrashButton_OnClick()
         {
-            if (synthesizer.IsRecordingAudio)
+            if (dsp.IsRecordingAudio)
             {
                 Utils.Assert(!isPlaying);
 
@@ -152,9 +152,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                 playPauseButton.Click();
             }
 
-            synthesizer.RemoveAudioSource(recordedAudioSource);
+            dsp.RemoveAudioSource(recordedAudioSource);
 
-            synthesizer.ClearRecordedAudio();
+            dsp.ClearRecordedAudio();
 
             playPauseButton.Disable();
             trashButton.Disable();
@@ -218,7 +218,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             public UpdateDurationLabelAction(RecordingControlGroup recordingControlGroup)
             {
                 this.recordingControlGroup = recordingControlGroup;
-                this.recordedAudioSource = recordingControlGroup.recordedAudioSource;
+                recordedAudioSource = recordingControlGroup.recordedAudioSource;
             }
 
             public override bool Act(float delta)

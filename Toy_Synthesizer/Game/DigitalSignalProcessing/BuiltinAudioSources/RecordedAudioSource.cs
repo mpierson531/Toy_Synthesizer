@@ -8,20 +8,22 @@ using System.Threading.Tasks;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
-namespace Toy_Synthesizer.Game.Synthesizer.Backend.BuiltinAudioSources
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
+
+namespace Toy_Synthesizer.Game.DigitalSignalProcessing.BuiltinAudioSources
 {
     // TODO: If PolyphonicSynthesizer changes to include gain/pan/final mix in recording, compensate.
 
     public class RecordedAudioSource : IAudioSource
     {
-        private readonly PolyphonicSynthesizer synthesizer;
+        private DSP dsp;
 
         private int framesPlayed;
 
         // This is in seconds.
         public double Duration
         {
-            get => synthesizer.RecordedAudioDuration;
+            get => dsp.RecordedAudioDuration;
         }
 
         // This is in seconds.
@@ -30,7 +32,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend.BuiltinAudioSources
             get
             {
                 long totalFrames = framesPlayed;
-                long clipFrames = synthesizer.RecordedAudioCount / 2;
+                long clipFrames = dsp.RecordedAudioCount / 2;
 
                 if (clipFrames == 0)
                 {
@@ -39,18 +41,18 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend.BuiltinAudioSources
 
                 long frameInClip = totalFrames % clipFrames;
 
-                return frameInClip / (double)synthesizer.SampleRate;
+                return frameInClip / (double)dsp.SampleRate;
             }
         }
 
-        public RecordedAudioSource(PolyphonicSynthesizer synthesizer)
+        public RecordedAudioSource(DSP dsp)
         {
-            this.synthesizer = synthesizer;
+            this.dsp = dsp;
         }
 
         public int Read(Span<float> buffer)
         {
-            synthesizer.TryTakeRecordedAudio(buffer, requestedCount: buffer.Length, out int realCount);
+            dsp.TryTakeRecordedAudio(buffer, requestedCount: buffer.Length, out int realCount);
 
             if (realCount == 0)
             {

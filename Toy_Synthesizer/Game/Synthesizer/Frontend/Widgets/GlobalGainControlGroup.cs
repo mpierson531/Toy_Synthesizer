@@ -13,14 +13,14 @@ using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
 using Toy_Synthesizer.Game.Synthesizer.Backend;
-using Toy_Synthesizer.Game.Synthesizer.Frontend;
 using Toy_Synthesizer.Game.UI;
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
     public class GlobalGainControlGroup : GroupWidget
     {
-        private Backend.PolyphonicSynthesizer synthesizer;
+        private DigitalSignalProcessing.DSP dsp;
 
         private Slider gainSlider;
         private TextField gainSliderDisplayTextField;
@@ -36,7 +36,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                    positionChildren: false,
                    sizeChildren: false)
         {
-            this.synthesizer = uiManager.Game.Synthesizer.Backend.PolyphonicSynthesizer;
+            dsp = uiManager.Game.DSP;
 
             Style.RenderData.SetColor(uiManager.BackgroundedLabelTint);
 
@@ -48,7 +48,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             InitWidgets();
 
-            synthesizer.OnGlobalGainChanged += Synthesizer_OnGlobalGainChanged;
+            dsp.OnGlobalGainChanged += Synthesizer_OnGlobalGainChanged;
         }
 
         private void InitWidgets()
@@ -107,7 +107,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             // The slider and display textfield will be set through Synthesizer_OnGlobalGainChanged.
 
-            synthesizer.GlobalGain = PolyphonicSynthesizer.DEFAULT_GLOBAL_GAIN;
+            dsp.GlobalGain = DSP.DEFAULT_GLOBAL_GAIN;
         }
 
         private void SetGlobalGain(double newValue_Percentage, bool setSlider, bool setDisplay)
@@ -121,7 +121,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             double newValue_Scalar = GeoMath.PercentToScalar(newValue_Percentage);
 
-            synthesizer.GlobalGain = newValue_Scalar;
+            dsp.GlobalGain = newValue_Scalar;
 
             if (setSlider)
             {
@@ -140,17 +140,17 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             settingValueFromSlider = true;
 
-            gainSlider.CurrentValue = (float)GeoMath.ScalarToPercent(synthesizer.GlobalGain);
+            gainSlider.CurrentValue = (float)GeoMath.ScalarToPercent(dsp.GlobalGain);
         }
 
         private void SetDisplayTextField()
         {
-            gainSliderDisplayTextField.Text = ((float)GeoMath.ScalarToPercent(synthesizer.GlobalGain)).ToString();
+            gainSliderDisplayTextField.Text = ((float)GeoMath.ScalarToPercent(dsp.GlobalGain)).ToString();
         }
 
         private string GetUIXml()
         {
-            NumberRange<double> globalGainPercentageRange = NumberRangeUtils.ScalarToPercent(PolyphonicSynthesizer.GlobalGainRange);
+            NumberRange<double> globalGainPercentageRange = NumberRangeUtils.ScalarToPercent(DSP.GlobalGainRange);
 
             return
             $@"<Layout>
@@ -174,7 +174,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Size=""(65%, 40%)""
                  NumberMinValue=""{globalGainPercentageRange.Min}""
                  NumberMaxValue=""{globalGainPercentageRange.Max}""
-                 NumberDefaultValue=""{PolyphonicSynthesizer.DEFAULT_GLOBAL_GAIN}""
+                 NumberDefaultValue=""{DSP.DEFAULT_GLOBAL_GAIN}""
                  DragIncrement=""1.0""
                  Name=""{GLOBAL_GAIN_SLIDER_NAME}""/>
 

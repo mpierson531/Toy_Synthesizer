@@ -12,14 +12,17 @@ using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
 using Toy_Synthesizer.Game.Synthesizer.Backend;
-using Toy_Synthesizer.Game.Synthesizer.Frontend;
 using Toy_Synthesizer.Game.UI;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
+    // TODO: Implement usage of range in PolyphonicSynthesizer and implement command usage.
     public class VoiceMixControlGroup : GroupWidget
     {
+        private Game game;
+
         private VoiceGroup parentVoiceGroup;
 
         /*private Slider mixSlider;
@@ -32,19 +35,19 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private SliderDisplayWidget sliderDisplayWidget;
 
-        public VoiceMixControlGroup(Vec2f position, Vec2f size, UIManager uiManager)
+        public VoiceMixControlGroup(Vec2f position, Vec2f size, Game game)
             : base(position, size,
-                   style: uiManager.GetDefaultGroupStyle(),
+                   style: game.UIManager.GetDefaultGroupStyle(),
                    positionChildren: false,
                    sizeChildren: false)
         {
-            Style.RenderData.SetColor(uiManager.BackgroundedLabelTint);
+            Style.RenderData.SetColor(game.UIManager.BackgroundedLabelTint);
 
             Adapters.Add(new PreciseGroupLayoutAdapter());
 
             string uiXml = GetUIXml();
 
-            UIXmlParser xmlParser = new UIXmlParser(uiManager);
+            UIXmlParser xmlParser = new UIXmlParser(game.UIManager);
             xmlParser.AddTypeFactory(new Frontend.SliderDisplayWidgetFactory());
 
             xmlParser.Parse(uiXml, rootParent: this);
@@ -63,7 +66,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             Utils.Assert(newParent is VoiceGroup || newParent is null, "A VoiceMixControlGroup's parent must be a VoiceGroup.");
 
-            this.parentVoiceGroup = (VoiceGroup)newParent;
+            parentVoiceGroup = (VoiceGroup)newParent;
 
             if (parentVoiceGroup is not null)
             {
@@ -196,7 +199,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                 return;
             }
 
-            voice.Mix = value;
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceMix(voice, value));
         }
 
         private Voice GetCurrentVoice()
@@ -211,9 +214,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                 <SliderDisplayWidget 
                 Position=""(0%, 0%)"" 
                 Size=""(100%, 100%)"" 
-                NumberMinValue=""{Voice.MixRange.Min}""
-                NumberMaxValue=""{Voice.MixRange.Max}""
-                NumberDefaultValue=""{Voice.DEFAULT_MIX}""
+                NumberMinValue=""{PolyphonicSynthesizer.MixRange.Min}""
+                NumberMaxValue=""{PolyphonicSynthesizer.MixRange.Max}""
+                NumberDefaultValue=""{PolyphonicSynthesizer.DEFAULT_MIX}""
                 TreatAsScalarPercentage=""true"" 
                 PropertyName=""Mix""
                 Name=""{SLIDER_DISPLAY_WIDGET_NAME}""/> 

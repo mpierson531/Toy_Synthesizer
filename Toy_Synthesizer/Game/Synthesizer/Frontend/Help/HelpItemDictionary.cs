@@ -5,9 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 
-using Toy_Synthesizer.Game.Synthesizer.Frontend.Help;
-
-namespace Toy_Synthesizer.Game.Plugins.Builtin.Core.Help
+namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Help
 {
     public sealed class HelpItemDictionary : IDictionary<string, HelpItem>
     {

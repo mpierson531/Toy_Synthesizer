@@ -13,7 +13,6 @@ using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
 using Toy_Synthesizer.Game.Synthesizer.Backend;
-using Toy_Synthesizer.Game.Synthesizer.Frontend;
 using Toy_Synthesizer.Game.UI;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
@@ -34,7 +33,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                    positionChildren: false,
                    sizeChildren: false)
         {
-            frontend = uiManager.Game.Synthesizer.Frontend;
+            frontend = uiManager.Game.SynthesizerFrontend;
 
             settingShiftAmount = false;
             settingControlAmount = false;

@@ -18,17 +18,19 @@ using GeoLib.GeoUtils.Collections;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
 using Toy_Synthesizer.Game.Data;
 using Toy_Synthesizer.Game.Data.Generic;
 using Toy_Synthesizer.Game.Midi;
 using Toy_Synthesizer.Game.Synthesizer.Backend;
-using Toy_Synthesizer.Game.Synthesizer.Backend.BuiltinAudioEffects;
+using Toy_Synthesizer.Game.DigitalSignalProcessing.BuiltinAudioEffects;
 using Toy_Synthesizer.Game.Synthesizer.Frontend.Console;
 using Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets;
 using Toy_Synthesizer.Game.UI;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 {
+    // TODO: Implement adding/removing voices and oscillators.
     public class Frontend
     {
         public const double DEFAULT_SHIFT_SEMITONE_AMOUNT = 12.0;
@@ -46,8 +48,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         private readonly UIXmlParser uiXmlParser;
 
         private readonly Game game;
-
-        private readonly Backend.Backend backend;
 
         private readonly Dictionary<Keys, Voice[]> keyVoiceBindings;
 
@@ -77,7 +77,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
                 if (currentShiftShiftedSemitoneAmount.HasValue)
                 {
-                    backend.PolyphonicSynthesizer.GlobalVoicePitchShiftSemitones += delta;
+                    game.Synthesizer.GlobalVoicePitchShiftSemitones += delta;
 
                     currentShiftShiftedSemitoneAmount += delta;
                 }
@@ -100,7 +100,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
                 if (currentControlShiftedSemitoneAmount.HasValue)
                 {
-                    backend.PolyphonicSynthesizer.GlobalVoicePitchShiftSemitones += delta;
+                    game.Synthesizer.GlobalVoicePitchShiftSemitones += delta;
 
                     currentControlShiftedSemitoneAmount += delta;
                 }
@@ -112,12 +112,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         public Action<double> OnShiftSemitoneAmountChanged;
         public Action<double> OnControlSemitoneAmountChanged;
 
-        public Frontend(Game game, Backend.Backend backend)
+        public Frontend(Game game)
         {
-            this.backend = backend;
             this.game = game;
 
-            this.uiXmlParser = new UIXmlParser(game.UIManager);
+            uiXmlParser = new UIXmlParser(game.UIManager);
 
             currentShiftShiftedSemitoneAmount = null;
             currentControlShiftedSemitoneAmount = null;
@@ -141,20 +140,29 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             {
                 for (int index = 0; index < voices.Length; index++)
                 {
-                    voices[index].LPF = new StateVariableLPF(12000, 0.2, backend.PolyphonicSynthesizer.SampleRate);
+                    voices[index].LPF = new StateVariableLPF(12000, 0.2, game.Synthesizer.SampleRate);
                 }
 
-                backend.PolyphonicSynthesizer.AddVoices(voices);
+                for (int index = 0; index < voices.Length; index++)
+                {
+                    AudioSourceCommand addVoiceCommand = SynthesizerCommands.AddVoice(voices[index]);
+
+                    game.Synthesizer.SendCommand(ref addVoiceCommand);
+                }
             }
 
             // Distribute the oscillator amplitudes equally, to ensure a decent volume.
-            backend.PolyphonicSynthesizer.ForEachVoice(voice =>
+            AudioSourceCommand forEachVoiceCommand = SynthesizerCommands.ForEachVoiceAction(delegate (Voice voice)
             {
                 if (voice.Oscillators.Count > 1)
                 {
-                    voice.Oscillators.ForEach(oscillator => oscillator.Amplitude /= (double)voice.Oscillators.Count);
+                    voice.Oscillators.ForEach(oscillator => oscillator.Amplitude /= voice.Oscillators.Count);
                 }
             });
+
+            game.Synthesizer.SendCommand(ref forEachVoiceCommand);
+
+            game.DSP.AddAudioEffect(new DigitalSignalProcessing.BuiltinAudioEffects.Delays.SimpleFeedbackDelay(game.DSP));
 
             voiceProperties = new ViewableList<Property<Voice>>();
 
@@ -171,6 +179,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             InitShiftAndControlKeyShiftUI();
             InitRecordingUI();
             InitVoicesUI();
+
+            InitConsole();
         }
 
         private void InitMasterVolumeUI()
@@ -265,14 +275,16 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             float currentY = voicesGroup.Position.Y;
 
-            backend.PolyphonicSynthesizer.ForEachVoice(delegate (Voice voice)
+            AudioSourceCommand forEachVoiceCommand = SynthesizerCommands.ForEachVoiceAction(delegate (Voice voice)
             {
                 InitVoiceGroup(voice, ref currentY, offsetYFirst: false);
             });
 
+            game.Synthesizer.SendCommand(ref forEachVoiceCommand);
+
             game.AddUIWidgets(widgets);
 
-            backend.PolyphonicSynthesizer.OnVoiceAdded += delegate (PolyphonicSynthesizer polyphonic, Voice voice)
+            game.Synthesizer.OnVoiceAdded += delegate (PolyphonicSynthesizer polyphonic, Voice voice)
             {
                 float currentY = voicesGroup[voicesGroup.Count - 1].Position.Y;
 
@@ -291,7 +303,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             if (offsetYFirst)
             {
-                currentY += groupH + (voicesGroup.Size.Y * 0.1f);
+                currentY += groupH + voicesGroup.Size.Y * 0.1f;
             }
 
             string xml = "<Layout>" + Environment.NewLine;
@@ -301,7 +313,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
                     <VoiceGroup X=""{groupX}"" Y=""{groupY}"" W=""{groupW}"" H=""{groupH}""/>
             ";
 
-            currentY += groupH + (voicesGroup.Size.Y * 0.05f);
+            currentY += groupH + voicesGroup.Size.Y * 0.05f;
 
             xml += Environment.NewLine + "</Layout>";
 
@@ -333,7 +345,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             keyVoiceBindings.Add(key, allVoices);
 
-            backend.PolyphonicSynthesizer.AddVoices(voices);
+            for (int index = 0; index < voices.Length; index++)
+            {
+                AudioSourceCommand addVoiceCommand = SynthesizerCommands.AddVoice(voices[index]);
+
+                game.DSP.SendAudioSourceCommand(game.Synthesizer, addVoiceCommand);
+            }
         }
 
         public void AddVoiceKeyBinding(Keys key, Voice voice)
@@ -345,7 +362,19 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         {
             keyVoiceBindings.Add(key, voices);
 
-            backend.PolyphonicSynthesizer.AddVoices(voices);
+            for (int index = 0; index < voices.Length; index++)
+            {
+                AudioSourceCommand addVoiceCommand = SynthesizerCommands.AddVoice(voices[index]);
+
+                game.DSP.SendAudioSourceCommand(game.Synthesizer, addVoiceCommand);
+            }
+        }
+
+        private void InitConsole()
+        {
+            console.Init();
+
+            console.InitUI();
         }
 
         public bool KeyDown(Keys key, bool isRepeat, float holdTime)
@@ -359,7 +388,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             if (!isRepeat && keyVoiceBindings.TryGetValue(key, out Voice[] voices))
             {
-                backend.PolyphonicSynthesizer.VoicesOn(voices);
+                for (int index = 0; index < voices.Length; index++)
+                {
+                    AudioSourceCommand voiceOnCommand = SynthesizerCommands.VoiceOn(voices[index]);
+
+                    game.DSP.SendAudioSourceCommand(game.Synthesizer, voiceOnCommand);
+                }
 
                 return true;
             }
@@ -368,7 +402,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             {
                 currentShiftShiftedSemitoneAmount = ShiftSemitoneAmount;
 
-                backend.PolyphonicSynthesizer.GlobalVoicePitchShiftSemitones += ShiftSemitoneAmount;
+                game.Synthesizer.GlobalVoicePitchShiftSemitones += ShiftSemitoneAmount;
 
                 return true;
             }
@@ -377,7 +411,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             {
                 currentControlShiftedSemitoneAmount = ControlSemitoneAmount;
 
-                backend.PolyphonicSynthesizer.GlobalVoicePitchShiftSemitones += ControlSemitoneAmount;
+                game.Synthesizer.GlobalVoicePitchShiftSemitones += ControlSemitoneAmount;
 
                 return true;
             }
@@ -389,23 +423,28 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         {
             if (keyVoiceBindings.TryGetValue(key, out Voice[] voices))
             {
-                backend.PolyphonicSynthesizer.VoicesOff(voices);
+                for (int index = 0; index < voices.Length; index++)
+                {
+                    AudioSourceCommand voiceOffCommand = SynthesizerCommands.VoiceOff(voices[index]);
+
+                    game.DSP.SendAudioSourceCommand(game.Synthesizer, voiceOffCommand);
+                }
             }
 
-            if ((key == Keys.LeftShift && !game.Geo.Input.keyboard.IsKeyDown(Keys.RightShift)) 
-                || (key == Keys.RightShift && !game.Geo.Input.keyboard.IsKeyDown(Keys.LeftShift)))
+            if (key == Keys.LeftShift && !game.Geo.Input.keyboard.IsKeyDown(Keys.RightShift) 
+                || key == Keys.RightShift && !game.Geo.Input.keyboard.IsKeyDown(Keys.LeftShift))
             {
-                backend.PolyphonicSynthesizer.GlobalVoicePitchShiftSemitones -= currentShiftShiftedSemitoneAmount.Value;
+                game.Synthesizer.GlobalVoicePitchShiftSemitones -= currentShiftShiftedSemitoneAmount.Value;
 
                 currentShiftShiftedSemitoneAmount = null;
 
                 return true;
             }
 
-            if ((key == Keys.LeftControl && !game.Geo.Input.keyboard.IsKeyDown(Keys.RightControl))
-                || (key == Keys.RightControl && !game.Geo.Input.keyboard.IsKeyDown(Keys.LeftControl)))
+            if (key == Keys.LeftControl && !game.Geo.Input.keyboard.IsKeyDown(Keys.RightControl)
+                || key == Keys.RightControl && !game.Geo.Input.keyboard.IsKeyDown(Keys.LeftControl))
             {
-                backend.PolyphonicSynthesizer.GlobalVoicePitchShiftSemitones -= currentControlShiftedSemitoneAmount.Value;
+                game.Synthesizer.GlobalVoicePitchShiftSemitones -= currentControlShiftedSemitoneAmount.Value;
 
                 currentControlShiftedSemitoneAmount = null;
 
@@ -463,18 +502,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         public void WindowResized(int width, int height)
         {
             console.WindowResized(width, height);
-        }
-
-        public void Init(Stage stage)
-        {
-            InitUI(stage);
-        }
-
-        private void InitUI(Stage stage)
-        {
-            console.Init();
-
-            console.InitUI(stage);
         }
 
         private static Dictionary<Keys, Voice[]> GetDefaultKeyVoiceBindings()
@@ -590,7 +617,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             Vec2f playButtonVertexStart = new Vec2f(0.225f, 0.225f);
             Vec2f playButtonVertexEnd = new Vec2f(0.725f, 0.825f);
 
-            Vec2f[] playButtonVertices = GeoLib.GeoShapes.Shapes.GeneratePolygonVertices(playButtonVertexStart, playButtonVertexEnd, 3);
+            Vec2f[] playButtonVertices = Shapes.GeneratePolygonVertices(playButtonVertexStart, playButtonVertexEnd, 3);
 
             Vec2f pauseButtonVertexStart = new Vec2f(0.3f, 0.25f);
             Vec2f pauseButtonVertexEnd = new Vec2f(0.7f, 0.775f);
@@ -966,7 +993,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             {
                 return new VoiceGroup(position, size, 
                                       voice: null, 
-                                      uiManager: uiManager);
+                                      game: uiManager.Game);
             }
         }
 

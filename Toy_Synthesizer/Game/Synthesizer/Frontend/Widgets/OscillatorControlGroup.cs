@@ -13,11 +13,11 @@ using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
 using Toy_Synthesizer.Game.Synthesizer.Backend;
-using Toy_Synthesizer.Game.Synthesizer.Frontend;
 using Toy_Synthesizer.Game.UI;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
+    // TODO: Implement usage of range in PolyphonicSynthesizer and implement command usage.
     public class OscillatorControlGroup : GroupWidget
     {
         private VoiceGroup parentVoiceGroup;
@@ -58,7 +58,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             Utils.Assert(newParent is VoiceGroup || newParent is null, "A VoiceMixControlGroup's parent must be a VoiceGroup.");
 
-            this.parentVoiceGroup = (VoiceGroup)newParent;
+            parentVoiceGroup = (VoiceGroup)newParent;
 
             if (parentVoiceGroup is not null)
             {
@@ -118,7 +118,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void ResetButton_OnClick()
         {
-            SetMix(GeoMath.ScalarToPercent(Voice.DEFAULT_MIX), setSlider: true, setDisplay: true);
+            SetMix(GeoMath.ScalarToPercent(PolyphonicSynthesizer.DEFAULT_MIX), setSlider: true, setDisplay: true);
         }
 
         private void SetMix(double newValue_Percentage, bool setSlider, bool setDisplay)
@@ -190,7 +190,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private string GetUIXml()
         {
-            NumberRange<double> mixPercentageRange = NumberRangeUtils.ScalarToPercent(Voice.MixRange);
+            NumberRange<double> mixPercentageRange = NumberRangeUtils.ScalarToPercent(PolyphonicSynthesizer.MixRange);
 
             return
             $@"<Layout>
@@ -214,7 +214,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Size=""(42.5%, 100%)""
                  NumberMinValue=""{mixPercentageRange.Min}""
                  NumberMaxValue=""{mixPercentageRange.Max}""
-                 NumberDefaultValue=""{Voice.DEFAULT_MIX}""
+                 NumberDefaultValue=""{PolyphonicSynthesizer.DEFAULT_MIX}""
                  DragIncrement=""1.0""
                  Name=""{MIX_SLIDER_NAME}""/>
 

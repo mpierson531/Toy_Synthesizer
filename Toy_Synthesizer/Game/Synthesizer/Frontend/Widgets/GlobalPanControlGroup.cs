@@ -13,14 +13,14 @@ using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
 using Toy_Synthesizer.Game.Synthesizer.Backend;
-using Toy_Synthesizer.Game.Synthesizer.Frontend;
 using Toy_Synthesizer.Game.UI;
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
     public class GlobalPanControlGroup : GroupWidget
     {
-        private Backend.PolyphonicSynthesizer synthesizer;
+        private DSP dsp;
 
         private Slider panSlider;
         private TextField panSliderDisplayTextField;
@@ -36,7 +36,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                    positionChildren: false,
                    sizeChildren: false)
         {
-            this.synthesizer = uiManager.Game.Synthesizer.Backend.PolyphonicSynthesizer;
+            dsp = uiManager.Game.DSP;
 
             Style.RenderData.SetColor(uiManager.BackgroundedLabelTint);
 
@@ -48,7 +48,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             InitWidgets();
 
-            synthesizer.OnGlobalPanChanged += Synthesizer_OnGlobalPanChanged;
+            dsp.OnGlobalPanChanged += Synthesizer_OnGlobalPanChanged;
         }
 
         private void InitWidgets()
@@ -105,7 +105,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void ResetButton_OnClick()
         {
-            synthesizer.GlobalPan = PolyphonicSynthesizer.DEFAULT_GLOBAL_PAN;
+            dsp.GlobalPan = DSP.DEFAULT_GLOBAL_PAN;
         }
 
         private void SetPan(double newValue_Percentage, bool setSlider, bool setDisplay)
@@ -119,7 +119,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             double newValue_Scalar = GeoMath.PercentToScalar(newValue_Percentage);
 
-            synthesizer.GlobalPan = newValue_Scalar;
+            dsp.GlobalPan = newValue_Scalar;
 
             if (setSlider)
             {
@@ -138,17 +138,17 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             settingValueFromSlider = true;
 
-            panSlider.CurrentValue = (float)GeoMath.ScalarToPercent(synthesizer.GlobalPan);
+            panSlider.CurrentValue = (float)GeoMath.ScalarToPercent(dsp.GlobalPan);
         }
 
         private void SetDisplayTextField()
         {
-            panSliderDisplayTextField.Text = ((float)GeoMath.ScalarToPercent(synthesizer.GlobalPan)).ToString();
+            panSliderDisplayTextField.Text = ((float)GeoMath.ScalarToPercent(dsp.GlobalPan)).ToString();
         }
 
         private string GetUIXml()
         {
-            NumberRange<double> globalPanPercentageRange = NumberRangeUtils.ScalarToPercent(PolyphonicSynthesizer.GlobalPanRange);
+            NumberRange<double> globalPanPercentageRange = NumberRangeUtils.ScalarToPercent(DSP.GlobalPanRange);
 
             return
             $@"<Layout>
@@ -172,7 +172,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Size=""(65%, 40%)""
                  NumberMinValue=""{globalPanPercentageRange.Min}""
                  NumberMaxValue=""{globalPanPercentageRange.Max}""
-                 NumberDefaultValue=""{PolyphonicSynthesizer.DEFAULT_GLOBAL_PAN}""
+                 NumberDefaultValue=""{DSP.DEFAULT_GLOBAL_PAN}""
                  DragIncrement=""1.0""
                  Name=""{PAN_SLIDER_NAME}""/>
 

@@ -3,11 +3,9 @@ using System.Text;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Pooling;
 using GeoLib.GeoUtils.Collections;
-using Toy_Synthesizer.Game.Plugins.Builtin.Core.Help;
-using Toy_Synthesizer.Game.Synthesizer.Frontend.Console;
 using Toy_Synthesizer.Game.Synthesizer.Frontend.Help;
 
-namespace Toy_Synthesizer.Game.Plugins.Builtin.Core.Console
+namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Console
 {
     public static class CommandParser
     {

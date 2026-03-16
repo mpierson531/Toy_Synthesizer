@@ -8,6 +8,7 @@ using GeoLib;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Backend
 {
+    // TODO: implement commands.
     public class StateVariableLPF : ICopyable
     {
         private int sampleRate;
@@ -38,7 +39,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             cutoff = Math.Clamp(cutoff, 20.0, sampleRate * 0.45);
 
             Cutoff = cutoff;
-            Resonance = Math.Clamp(resonance, 0.0, 1.0);
+            Resonance = PolyphonicSynthesizer.LPF_ResonanceRange.Clamp(resonance);
 
             f = 2.0 * Math.Sin(Math.PI * cutoff / sampleRate);
 

@@ -41,7 +41,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         public static double SawtoothWave(double phase)
         {
-            return (phase / Math.PI) - 1.0;
+            return phase / Math.PI - 1.0;
         }
 
         public static double TriangleWave(double phase)
@@ -54,7 +54,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         {
             double fractional = phase - Math.Floor(phase); // Fractional of phase.
 
-            return (fractional < dutyCycle) ? 1.0 : -1.0;
+            return fractional < dutyCycle ? 1.0 : -1.0;
         }
 
         // dutyCycle is between 0.0 and 1.0 (0.5 for 50%).

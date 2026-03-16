@@ -9,54 +9,82 @@ using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
-using NAudio.Wave;
-
-using SharpDX.MediaFoundation;
-
-using Toy_Synthesizer.Game.CommonUtils;
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
+using Toy_Synthesizer.Game.Synthesizer.Frontend.Console;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Backend
 {
-    public class PolyphonicSynthesizer : ISampleProvider
+    // TODO: Look into Voice/StateVariableLPF default cutoffs more.
+    public class PolyphonicSynthesizer : IAudioSource, IAudioSourceCommandReceiver
     {
-        public const int DEFAULT_SAMPLE_RATE = 44100;
-
         public const double DEFAULT_AMPLITUDE = 0.25;
         public const WaveformType DEFAULT_WAVEFORM_TYPE = WaveformType.Square;
 
-        public const double DEFAULT_GLOBAL_GAIN = 0.5;
-        public const double DEFAULT_MASTER_VOLUME = 1.0;
-        public const double DEFAULT_GLOBAL_PAN = 0.0;
+        public const double MIN_CENTER_FREQUENCY = 0.0;
+        public const double MAX_CENTER_FREQUENCY = 32000.0;
 
-        public const double MIN_GLOBAL_GAIN = 0.0;
-        public const double MAX_GLOBAL_GAIN = 5.0;
+        public const double DEFAULT_LPFBASE_CUTOFF = 800.0;
+        public const double DEFAULT_LPF_ADSR_AMOUNT = 3000.0;
+        public const double DEFAULT_MIX = 1.0;
 
-        public const double MIN_MASTER_VOLUME = 0.0;
-        public const double MAX_MASTER_VOLUME = 1.0;
+        public const double MIN_ATTACK = 0.0;
+        public const double MAX_ATTACK = 3600.0;
 
-        public const double MIN_GLOBAL_PAN = -1.0;
-        public const double MAX_GLOBAL_PAN = 1.0;
+        public const double MIN_DECAY = 0.0;
+        public const double MAX_DECAY = 3600.0;
+
+        public const double MIN_SUSTAIN = 0.0;
+        public const double MAX_SUSTAIN = 1.0;
+
+        public const double MIN_RELEASE = 0.0;
+        public const double MAX_RELEASE = 3600.0;
+
+        public const double MIN_LPF_BASE_CUTOFF = 0.0;
+        public const double MAX_LPF_BASE_CUTOFF = 32000.0;
+
+        public const double MIN_LPF_RESONANCE = 0.0;
+        public const double MAX_LPF_RESONANCE = 1.0;
 
         public const double MIN_OSCILLATOR_AMPLITUDE = 0.0;
         public const double MAX_OSCILLATOR_AMPLITUDE = 1.0;
 
-        public static readonly NumberRange<double> GlobalGainRange;
-        public static readonly NumberRange<double> MasterVolumeRange;
-        public static readonly NumberRange<double> GlobalPanRange;
+        public const double MIN_OSCILLATOR_DETUNE_CENTS = 0.0;
+        public const double MAX_OSCILLATOR_DETUNE_CENTS = 50.0;
+
+        public const double MIN_MIX = 0.0;
+        public const double MAX_MIX = 1.0;
+
+        public static readonly NumberRange<double> CenterFrequencyRange;
+
+        public static readonly NumberRange<double> AttackRange;
+        public static readonly NumberRange<double> DecayRange;
+        public static readonly NumberRange<double> SustainRange;
+        public static readonly NumberRange<double> ReleaseRange;
+
+        public static readonly NumberRange<double> LPF_BaseCutoffRange;
+        public static readonly NumberRange<double> LPF_ResonanceRange;
+
         public static readonly NumberRange<double> OscillatorAmplitudeRange;
-        public static readonly ImmutableArray<WaveformType> SupportedWaveformTypes;
+        public static readonly ImmutableArray<WaveformType> SupportedOscillatorWaveformTypes;
+        public static readonly NumberRange<double> OscillatorDetuneCentsRange;
+
+        public static readonly NumberRange<double> MixRange;
 
         static PolyphonicSynthesizer()
         {
-            GlobalGainRange = NumberRange<double>.From(MIN_GLOBAL_GAIN, MAX_GLOBAL_GAIN);
+            CenterFrequencyRange = NumberRange<double>.From(MIN_CENTER_FREQUENCY, MAX_CENTER_FREQUENCY);
 
-            MasterVolumeRange = NumberRange<double>.From(MIN_MASTER_VOLUME, MAX_MASTER_VOLUME);
+            AttackRange = NumberRange<double>.From(MIN_ATTACK, MAX_ATTACK);
+            DecayRange = NumberRange<double>.From(MIN_DECAY, MAX_DECAY);
+            SustainRange = NumberRange<double>.From(MIN_SUSTAIN, MAX_SUSTAIN);
+            ReleaseRange = NumberRange<double>.From(MIN_RELEASE, MAX_RELEASE);
 
-            GlobalPanRange = NumberRange<double>.From(MIN_GLOBAL_PAN, MAX_GLOBAL_PAN);
+            LPF_BaseCutoffRange = NumberRange<double>.From(MIN_LPF_BASE_CUTOFF, MAX_LPF_BASE_CUTOFF);
+            LPF_ResonanceRange = NumberRange<double>.From(MIN_LPF_RESONANCE, MAX_LPF_RESONANCE);
 
             OscillatorAmplitudeRange = NumberRange<double>.From(MIN_OSCILLATOR_AMPLITUDE, MAX_OSCILLATOR_AMPLITUDE);
 
-            SupportedWaveformTypes = new ImmutableArray<WaveformType>
+            SupportedOscillatorWaveformTypes = new ImmutableArray<WaveformType>
             (
                 WaveformType.Sine,
                 WaveformType.Triangle,
@@ -66,9 +94,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                 WaveformType.Pulse,
                 WaveformType.InversePulse
             );
-        }
 
-        private readonly float[] tempAudioSourceMixBuffer = new float[int.MaxValue / 2];
+            OscillatorDetuneCentsRange = NumberRange<double>.From(MIN_OSCILLATOR_DETUNE_CENTS, MAX_OSCILLATOR_DETUNE_CENTS);
+
+            MixRange = NumberRange<double>.From(MIN_MIX, MAX_MIX);
+        }
 
         private readonly ViewableList<Voice> onVoices = new ViewableList<Voice>(500);
 
@@ -77,35 +107,15 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         // This is for use with the RemoveVoice method.
         private readonly ViewableList<int> onVoicesIndicesToRemoveOnNextRead;
 
-        private readonly ViewableList<IAudioSource> audioSources;
-
-        private readonly ViewableList<IAudioEffect> effects;
-
-        private ArrayRingBuffer<float> recordedAudio;
-
-        private readonly WaveFormat waveFormat;
         private readonly int sampleRate;
 
-        private readonly object lockObject = new object();
+        //private readonly object lockObject = new object();
 
         private double globalVoicePitchShiftRatio;
-        private double globalGain;
-        private double masterVolume;
-        private double globalPan;
-
-        private bool isRecordingAudio;
-
-        private double currentLeftMix;
-        private double currentRightMix;
 
         public int SampleRate
         {
             get => sampleRate;
-        }
-
-        public WaveFormat WaveFormat
-        {
-            get => waveFormat;
         }
 
         public double GlobalVoicePitchShiftRatio
@@ -120,188 +130,49 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             set => GlobalVoicePitchShiftRatio = ChromaticScaleUtils.SemitonesToPitchRatio(value);
         }
 
-        public double GlobalGain
-        {
-            get => Interlocked.CompareExchange(ref globalGain, 0.0, 0.0);
-
-            set
-            {
-                lock (lockObject)
-                {
-                    double previous = globalGain;
-
-                    globalGain = GlobalGainRange.Clamp(value);
-
-                    OnGlobalGainChanged?.Invoke(previous, globalGain);
-                }
-            }
-        }
-
-        public double MasterVolume
-        {
-            get => Interlocked.CompareExchange(ref masterVolume, 0.0, 0.0);
-
-            set
-            {
-                lock(lockObject)
-                {
-                    double previous = masterVolume;
-
-                    masterVolume = MasterVolumeRange.Clamp(value);
-
-                    OnMasterVolumeChanged?.Invoke(previous, masterVolume);
-                }
-            }
-        }
-
-        public double GlobalPan
-        {
-            get => Interlocked.CompareExchange(ref globalPan, 0.0, 0.0);
-
-            set
-            {
-                lock (lockObject)
-                {
-                    double previous = globalPan;
-
-                    globalPan = GlobalPanRange.Clamp(value);
-
-                    OnGlobalPanChanged?.Invoke(previous, globalPan);
-                }
-            }
-        }
-
-        public bool IsRecordingAudio
-        {
-            get => isRecordingAudio;
-        }
-
-        public int RecordedAudioCount
-        {
-            get => recordedAudio.CurrentCount;
-        }
-
-        public double RecordedAudioDuration
-        {
-            get => recordedAudio.CurrentCount / (2.0 * SampleRate);
-        }
-
-        public double CurrentLeftMix
-        {
-            get => currentLeftMix;
-        }
-
-        public double CurrentRightMix
-        {
-            get => currentRightMix;
-        }
-
         public event Action<PolyphonicSynthesizer, Voice> OnVoiceAdded;
         public event Action<PolyphonicSynthesizer, Voice> OnVoiceRemoved;
 
-        public event Action<double, double> OnGlobalGainChanged;
-        public event Action<double, double> OnMasterVolumeChanged;
-        public event Action<double, double> OnGlobalPanChanged;
-
-        public PolyphonicSynthesizer(int sampleRate = DEFAULT_SAMPLE_RATE)
+        public PolyphonicSynthesizer(int sampleRate)
         {
             this.sampleRate = sampleRate;
-            waveFormat = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, 2);
 
             onVoicesIndicesToRemoveOnNextRead = new ViewableList<int>();
 
-            audioSources = new ViewableList<IAudioSource>(100);
-
-            effects = new ViewableList<IAudioEffect>(100);
-
-            int recordingMaxSampleCount = 2 * sampleRate * 300;
-
-            recordedAudio = new ArrayRingBuffer<float>(recordingMaxSampleCount);
-
             GlobalVoicePitchShiftSemitones = 0.0;
-
-            GlobalGain = DEFAULT_GLOBAL_GAIN;
-
-            MasterVolume = DEFAULT_MASTER_VOLUME;
-
-            GlobalPan = DEFAULT_GLOBAL_PAN;
         }
 
-        public void AddAudioSource(IAudioSource audioSource)
+        private void ForEachVoice(Action<Voice> action)
         {
-            lock(lockObject)
+            for (int index = 0; index < offVoices.Count; index++)
             {
-                audioSources.Add(audioSource);
+                action(offVoices.GetUnchecked(index));
+            }
+
+            for (int index = 0; index < onVoices.Count; index++)
+            {
+                action(onVoices.GetUnchecked(index));
             }
         }
 
-        public bool RemoveAudioSource(IAudioSource audioSource)
-        {
-            lock(lockObject)
-            {
-                return audioSources.Remove(audioSource);
-            }
-        }
-
-        public void AddAudioEffect(IAudioEffect effect)
-        {
-            lock(lockObject)
-            {
-                effects.Add(effect);
-            }
-        }
-
-        public bool RemoveAudioEffect(IAudioEffect effect)
-        {
-            lock (lockObject)
-            {
-                return effects.Remove(effect);
-            }
-        }
-
-        public void ForEachVoice(Action<Voice> action)
-        {
-            lock (lockObject)
-            {
-                for (int index = 0; index < offVoices.Count; index++)
-                {
-                    action(offVoices.GetUnchecked(index));
-                }
-
-                for (int index = 0; index < onVoices.Count; index++)
-                {
-                    action(onVoices.GetUnchecked(index));
-                }
-            }
-        }
-
-        public void AddVoices(Voice[] voices,
+        private void AddVoice(Voice voice,
                               bool on = false)
-        {
-            for (int index = 0; index < voices.Length; index++)
-            { 
-                AddVoice(voices[index], on);
-            }
-        }
-
-        public void AddVoice(Voice voice,
-                             bool on = false)
         {
             if (ContainsVoice(voice))
             {
                 throw new InvalidOperationException("voice already exists.");
             }
 
-            if (voice.AdsrEnvelope is null)
+            if (voice.Adsr is null)
             {
-                voice.AdsrEnvelope = new AdsrEnvelope(sampleRate);
+                voice.Adsr = new AdsrEnvelope(sampleRate);
             }
             else
             {
-                voice.AdsrEnvelope.SampleRate = sampleRate;
+                voice.Adsr.SampleRate = sampleRate;
             }
 
-            if (voice.FilterAdsrEnvelope is null)
+            if (voice.LPF_Adsr is null)
             {
                 /*voice.FilterAdsrEnvelope = new AdsrEnvelope(sampleRate)
                 {
@@ -311,7 +182,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     ReleaseSeconds = 0.1
                 };*/
 
-                voice.FilterAdsrEnvelope = new AdsrEnvelope(sampleRate)
+                voice.LPF_Adsr = new AdsrEnvelope(sampleRate)
                 {
                     AttackSeconds = 0.0,
                     DecaySeconds = 0.1,
@@ -321,7 +192,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             }
             else
             {
-                voice.FilterAdsrEnvelope.SampleRate = sampleRate;
+                voice.LPF_Adsr.SampleRate = sampleRate;
             }
 
             if (voice.Oscillators is null || voice.Oscillators.IsEmpty)
@@ -374,14 +245,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
             if (OnVoiceAdded is not null)
             {
-                lock (lockObject)
-                {
-                    OnVoiceAdded(this, voice);
-                }
+                OnVoiceAdded(this, voice);
             }
         }
 
-        public bool RemoveVoice(Voice voice,
+        private bool RemoveVoice(Voice voice,
                                 bool allowReleaseIfOn = true)
         {
             if (!ContainsVoice(voice))
@@ -389,340 +257,94 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                 return false;
             }
 
-            lock (lockObject)
+            int offIndex = offVoices.IndexOf(voice);
+
+            if (offIndex != -1)
             {
-                int offIndex = offVoices.IndexOf(voice);
-
-                if (offIndex != -1)
-                {
-                    offVoices.RemoveAt(offIndex);
-
-                    return true;
-                }
-
-                int onIndex = onVoices.IndexOf(voice);
-
-                // onIndex should not be -1 by now.
-                Utils.Assert(onIndex != -1);
-
-                if (allowReleaseIfOn)
-                {
-                    VoiceOff(voice);
-
-                    onVoicesIndicesToRemoveOnNextRead.Add(onIndex);
-                }
-                else
-                {
-                    ResetVoice(voice);
-
-                    onVoices.RemoveAt(onIndex);
-                }
+                offVoices.RemoveAt(offIndex);
 
                 return true;
             }
-        }
 
-        // Begins voice.
-        // voice should already be added before this.
-        public void VoiceOn(Voice voice)
-        {
-            lock (lockObject)
+            int onIndex = onVoices.IndexOf(voice);
+
+            // onIndex should not be -1 by now.
+            Utils.Assert(onIndex != -1);
+
+            if (allowReleaseIfOn)
             {
-                AddOnVoice(voice, removeFromOff: true);
+                VoiceOff(voice);
 
-                voice.AdsrEnvelope.NoteOn();
-                voice.FilterAdsrEnvelope.NoteOn();
+                onVoicesIndicesToRemoveOnNextRead.Add(onIndex);
             }
-        }
-
-        // Initiates the ending of voice.
-        // voice should already be added before this.
-        public void VoiceOff(Voice voice)
-        {
-            lock (lockObject)
+            else
             {
-                voice.AdsrEnvelope.NoteOff();
-                voice.FilterAdsrEnvelope.NoteOff();
-            }
-        }
+                ResetVoice(voice);
 
-        // Begins voice.
-        // voices should already be added before this.
-        public void VoicesOn(Voice[] voices)
-        {
-            for (int index = 0; index < voices.Length; index++)
-            {
-                VoiceOn(voices[index]);
-            }
-        }
-
-        // Initiates the ending of voice.
-        // voices should already be added before this.
-        public void VoicesOff(Voice[] voices)
-        {
-            for (int index = 0; index < voices.Length; index++)
-            {
-                VoiceOff(voices[index]);
-            }
-        }
-
-        // Initiates the ending of any voice with the same center frequency as frequency.
-        public void VoicesOff(double frequency)
-        {
-            const double COMPARISON_EPSILON = 0.01;
-
-            lock (lockObject)
-            {
-                for (int index = 0; index < onVoices.Count; index++)
-                {
-                    Voice voice = onVoices.GetUnchecked(index);
-
-                    if (Math.Abs(voice.CenterFrequency - frequency) < COMPARISON_EPSILON)
-                    {
-                        voice.AdsrEnvelope.NoteOff();
-                    }
-                }
-            }
-        }
-
-        private void AddOnVoice(Voice voice, bool removeFromOff)
-        {
-            lock (lockObject)
-            {
-                if (!onVoices.Contains(voice))
-                {
-                    onVoices.Add(voice);
-                }
-
-                voice.IsOff = false;
-
-                if (removeFromOff)
-                {
-                    offVoices.Remove(voice);
-                }
-            }
-        }
-
-        private void AddOffVoice(Voice voice, bool removeFromOn)
-        {
-            lock(lockObject)
-            {
-                offVoices.Add(voice);
-
-                if (removeFromOn)
-                {
-                    onVoices.Remove(voice);
-                }
-            }
-        }
-
-        public bool ContainsVoice(Voice voice)
-        {
-            return offVoices.Contains(voice) || onVoices.Contains(voice);
-        }
-
-        public Voice GetFirstVoice(double centerFrequency)
-        {
-            Voice voice = offVoices.Find(voice => voice.CenterFrequency == centerFrequency);
-
-            if (voice is null)
-            {
-                voice = onVoices.Find(voice => voice.CenterFrequency == centerFrequency);
-            }
-
-            return voice;
-        }
-
-        // Returns true if any audio was given.
-        // If this returns false, it means there was no audio to give, and realCount will be set to 0.
-        // If there is audio to give, this will return true, and realCount will be set to the min of requestedCount and the amount of samples available to give.
-        // Additionally, this will give stereo audio. So realCount will always be an even number.
-        // Recorded audio will always be in stereo.
-        /*public bool TryTakeRecordedAudio(Span<float> samples, int requestedCount, out int realCount)
-        {
-            lock (lockObject)
-            {
-                if (recordedAudio.IsEmpty)
-                {
-                    realCount = 0;
-
-                    return false;
-                }
-
-                // Ensure the requestedCount and available samples are even for stereo alignment.
-
-                int toRead = Math.Min(requestedCount, recordedAudio.CurrentCount);
-
-                if (toRead % 2 != 0)
-                {
-                    toRead--;
-                }
-
-                if (toRead <= 0)
-                {
-                    realCount = 0;
-
-                    return false;
-                }
-
-                Span<float> samplesSpan = samples.Slice(0, toRead);
-
-                realCount = recordedAudio.Read(samplesSpan);
-
-                // Should always return true at this point.
-
-                return realCount > 0;
-            }
-        }*/
-
-        public bool TryGetRecordedAudio(out ReadOnlySpan<float> recording)
-        {
-            lock (lockObject)
-            {
-                if (IsRecordingAudio)
-                {
-                    recording = ReadOnlySpan<float>.Empty;
-
-                    return false;
-                }
-
-                recording = recordedAudio.GetReadonlySpan();
-
-                return true;
-            }
-        }
-
-        public bool TryTakeRecordedAudio(Span<float> samples, int requestedCount, out int realCount)
-        {
-            lock (lockObject)
-            {
-                if (recordedAudio.IsEmpty)
-                {
-                    realCount = 0;
-
-                    return false;
-                }
-
-                // REMOVE the Math.Min clamp. The ring buffer will handle looping internally 
-                // to fill the entire requestedCount.
-                int toRead = requestedCount;
-
-                if (toRead % 2 != 0)
-                {
-                    toRead--;
-                }
-
-                if (toRead <= 0)
-                {
-                    realCount = 0;
-
-                    return false;
-                }
-
-                Span<float> samplesSpan = samples.Slice(0, toRead);
-                realCount = recordedAudio.Read(samplesSpan);
-
-                return realCount > 0;
-            }
-        }
-
-        // Returns true if it was already recording.
-        public bool BeginRecordingAudio()
-        {
-            if (isRecordingAudio)
-            {
-                return true;
-            }
-
-            lock (lockObject)
-            {
-                isRecordingAudio = true;
-
-                recordedAudio.Clear();
-            }
-
-            return false;
-        }
-
-        // Returns false if it was not recording.
-        public bool StopRecordingAudio()
-        {
-            if (!isRecordingAudio)
-            {
-                return false;
-            }
-
-            lock (lockObject)
-            {
-                isRecordingAudio = false;
+                onVoices.RemoveAt(onIndex);
             }
 
             return true;
         }
 
-        // Returns true if there was any recorded audio that was cleared.
-        public bool ClearRecordedAudio()
+        // Begins voice.
+        // voice should already be added before this.
+        private void VoiceOn(Voice voice)
         {
-            if (isRecordingAudio)
+            AddOnVoice(voice, removeFromOff: true);
+
+            voice.Adsr.NoteOn();
+            voice.LPF_Adsr.NoteOn();
+        }
+
+        // Initiates the ending of voice.
+        // voice should already be added before this.
+        private void VoiceOff(Voice voice)
+        {
+            voice.Adsr.NoteOff();
+            voice.LPF_Adsr.NoteOff();
+        }
+
+        private void AddOnVoice(Voice voice, bool removeFromOff)
+        {
+            if (!onVoices.Contains(voice))
             {
-                StopRecordingAudio();
+                onVoices.Add(voice);
             }
 
-            lock (lockObject)
+            voice.IsOff = false;
+
+            if (removeFromOff)
             {
-                if (recordedAudio.IsEmpty)
-                {
-                    return false;
-                }
-
-                recordedAudio.Clear();
-
-                return true;
+                offVoices.Remove(voice);
             }
         }
 
-        public int Read(float[] buffer, int offset, int count)
+        private void AddOffVoice(Voice voice, bool removeFromOn)
         {
-            Array.Clear(buffer, offset, count); // Not sure about this.
+            offVoices.Add(voice);
 
-            double gain = GlobalGain;
-            double masterVolume = MasterVolume;
-
-            double volumeCoefficient = gain * masterVolume;
-
-            double globalPan = GlobalPan;
-
-            double normalizedPan = (globalPan + 1.0) / 2.0;
-
-            double leftMix = Math.Cos(normalizedPan * (Math.PI / 2));
-            double rightMix = Math.Sin(normalizedPan * (Math.PI / 2));
-
-            leftMix *= volumeCoefficient;
-            rightMix *= volumeCoefficient;
-
-            double globalVoicePitchShiftRatio = this.GlobalVoicePitchShiftRatio;
-
-            currentLeftMix = leftMix;
-            currentRightMix = rightMix;
-
-            SynthesizeVoices(buffer, offset, count, globalVoicePitchShiftRatio);
-
-            MixAudioSources(buffer, offset, count);
-
-            MixAudioEffects(buffer, offset, count);
-
-            // TODO: Maybe change to include gain/pan/final mix in recording.
-            if (isRecordingAudio)
+            if (removeFromOn)
             {
-                recordedAudio.Write(buffer.AsSpan(offset, count));
+                onVoices.Remove(voice);
             }
-
-            FinalMix(buffer, offset, count, leftMix, rightMix);
-
-            return count;
         }
 
-        private void SynthesizeVoices(float[] buffer, int offset, int count, double globalVoicePitchShiftRatio)
+        private bool ContainsVoice(Voice voice)
+        {
+            return offVoices.Contains(voice) || onVoices.Contains(voice);
+        }
+
+        int IAudioSource.Read(Span<float> buffer)
+        {
+            double globalVoicePitchShiftRatio = GlobalVoicePitchShiftRatio;
+
+            SynthesizeVoices(buffer, globalVoicePitchShiftRatio);
+
+            return buffer.Length;
+        }
+
+        private void SynthesizeVoices(Span<float> buffer, double globalVoicePitchShiftRatio)
         {
             if (!onVoicesIndicesToRemoveOnNextRead.IsEmpty)
             {
@@ -740,7 +362,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                 onVoicesIndicesToRemoveOnNextRead.Clear();
             }
 
-            for (int bufferIndex = 0; bufferIndex < count; bufferIndex += 2)
+            for (int bufferIndex = 0; bufferIndex < buffer.Length; bufferIndex += 2)
             {
                 double sample = 0.0;
 
@@ -748,10 +370,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                 {
                     Voice voice = onVoices.GetUnchecked(voiceIndex);
 
-                    double ampAdsrResult = voice.AdsrEnvelope.NextSample();
-                    double filterAdsrResult = voice.FilterAdsrEnvelope.NextSample();
+                    double ampAdsrResult = voice.Adsr.NextSample();
+                    double filterAdsrResult = voice.LPF_Adsr.NextSample();
 
-                    if (voice.AdsrEnvelope.IsFinished)
+                    if (voice.Adsr.IsFinished)
                     {
                         ResetVoice(voice);
 
@@ -769,7 +391,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
                     if (voice.LPF is not null)
                     {
-                        double cutoff = voice.BaseCutoff + (filterAdsrResult * voice.FilterAdsrEnvelopeAmount);
+                        double cutoff = voice.LPF_BaseCutoff + filterAdsrResult * voice.LPF_AdsrAmount;
 
                         voice.LPF.Set(cutoff, voice.LPF.Resonance, sampleRate);
 
@@ -781,97 +403,235 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     sample += ampAdsrResult * voiceSample;
                 }
 
-                WriteMonoToStereo(buffer, offset, bufferIndex, sample);
+                DSPUtils.WriteMonoToStereo(buffer, 0, bufferIndex, sample);
             }
         }
 
-        private void MixAudioSources(float[] buffer, int offset, int count)
+        public void SendCommands(ReadOnlySpan<AudioSourceCommand> commands)
         {
-            if (audioSources.IsEmpty)
+            for (int index = 0; index < commands.Length; index++)
             {
+                SendCommand(in commands[index]);
+            }
+        }
+
+        public void SendCommand(ref readonly AudioSourceCommand command)
+        {
+            if (command.CommandID < 0 || command.CommandID >= (int)SynthesizerCommandType.EndType)
+            {
+                throw InvalidCommandIDException(command.CommandID);
+            }
+
+            switch ((SynthesizerCommandType)command.CommandID)
+            {
+                case SynthesizerCommandType.None:
+                case SynthesizerCommandType.EndType:
+                    break;
+
+                case SynthesizerCommandType.AddVoice:
+                    AddVoice((Voice)command.ObjectValue);
+                    break;
+
+                case SynthesizerCommandType.RemoveVoice:
+                    RemoveVoice((Voice)command.ObjectValue);
+                    break;
+
+                case SynthesizerCommandType.VoiceOn:
+                    VoiceOn((Voice)command.ObjectValue);
+                    break;
+
+                case SynthesizerCommandType.VoiceOff:
+                    VoiceOff((Voice)command.ObjectValue);
+                    break;
+
+                case SynthesizerCommandType.ForEachVoiceAction:
+                    ForEachVoice((Action<Voice>)command.ObjectValue);
+                    break;
+
+                case SynthesizerCommandType.SetVoice_CenterFrequency:
+                    SetVoiceCenterFrequency((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_Mix:
+                    SetVoiceMix((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_Attack:
+                    SetVoiceAttack((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+                case SynthesizerCommandType.SetVoice_Decay:
+                    SetVoiceDecay((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+                case SynthesizerCommandType.SetVoice_Sustain:
+                    SetVoiceSustain((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+                case SynthesizerCommandType.SetVoice_Release:
+                    SetVoiceRelease((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_LPFBaseCutoff:
+                    SetVoiceLPFBaseCutoff((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_LPF_Resonance:
+                    SetVoiceLPFResonance((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_LPF_Attack:
+                    SetVoiceLPFAttack((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+                case SynthesizerCommandType.SetVoice_LPF_Decay:
+                    SetVoiceLPFDecay((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+                case SynthesizerCommandType.SetVoice_LPF_Sustain:
+                    SetVoiceLPFSustain((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+                case SynthesizerCommandType.SetVoice_LPF_Release:
+                    SetVoiceLPFRelease((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_LPF_ADSR_Amount:
+                    SetVoiceLPFAdsrAmount((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                case SynthesizerCommandType.Voice_AddOscillator:
+                    AddVoiceOscillator((Voice)command.ObjectValue, (Oscillator)command.ObjectValue2);
+                    break;
+
+                case SynthesizerCommandType.Voice_RemoveOscillator:
+                    RemoveVoiceOscillator((Voice)command.ObjectValue, (Oscillator)command.ObjectValue2);
+                    break;
+
+                case SynthesizerCommandType.SetVoice_Oscillator_Amplitude:
+                    SetVoiceOscillatorAmplitude((Oscillator)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_Oscillator_WaveformType:
+                    SetVoiceOscillatorWaveformType((Oscillator)command.ObjectValue, command.ValueStorage.Read<WaveformType>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_Oscillator_DetuneCents:
+                    SetVoiceOscillatorDetuneCents((Oscillator)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                default:
+                    throw InvalidCommandIDException(command.CommandID);
+            }
+        }
+
+        private static void SetVoiceCenterFrequency(Voice voice,  double frequency)
+        {
+            voice.CenterFrequency = CenterFrequencyRange.Clamp(frequency);
+        }
+
+        private static void SetVoiceMix(Voice voice, double mix)
+        {
+            voice.Mix = MixRange.Clamp(mix);
+        }
+
+        private static void SetVoiceAttack(Voice voice, double attack)
+        {
+            voice.Adsr.AttackSeconds = AttackRange.Clamp(attack);
+        }
+
+        private static void SetVoiceDecay(Voice voice, double decay)
+        {
+            voice.Adsr.DecaySeconds = DecayRange.Clamp(decay);
+        }
+
+        private static void SetVoiceSustain(Voice voice, double sustain)
+        {
+            voice.Adsr.SustainLevel = SustainRange.Clamp(sustain);
+        }
+
+        private static void SetVoiceRelease(Voice voice, double release)
+        {
+            voice.Adsr.ReleaseSeconds = ReleaseRange.Clamp(release);
+        }
+
+        private static  void SetVoiceLPFBaseCutoff(Voice voice, double baseCutoff)
+        {
+            voice.LPF_BaseCutoff = LPF_BaseCutoffRange.Clamp(baseCutoff);
+        }
+
+        private static void SetVoiceLPFResonance(Voice voice, double resonance)
+        {
+            voice.LPF.Resonance = LPF_ResonanceRange.Clamp(resonance);
+        }
+
+        private static void SetVoiceLPFAttack(Voice voice, double attack)
+        {
+            voice.LPF_Adsr.AttackSeconds = AttackRange.Clamp(attack);
+        }
+
+        private static void SetVoiceLPFDecay(Voice voice, double decay)
+        {
+            voice.LPF_Adsr.DecaySeconds = DecayRange.Clamp(decay);
+        }
+
+        private static void SetVoiceLPFSustain(Voice voice, double sustain)
+        {
+            voice.LPF_Adsr.SustainLevel = SustainRange.Clamp(sustain);
+        }
+
+        private static void SetVoiceLPFRelease(Voice voice, double release)
+        {
+            voice.LPF_Adsr.ReleaseSeconds = ReleaseRange.Clamp(release);
+        }
+
+        // TODO: Implement range.
+        private static void SetVoiceLPFAdsrAmount(Voice voice, double amount)
+        {
+            voice.LPF_AdsrAmount = amount;
+        }
+
+        private static void AddVoiceOscillator(Voice voice, Oscillator oscillator)
+        {
+            voice.Oscillators.Add(oscillator);
+        }
+
+        private static void RemoveVoiceOscillator(Voice voice, Oscillator oscillator)
+        {
+            if (voice.Oscillators.Remove(oscillator))
+            {
+                oscillator.Reset();
+            }
+        }
+
+        private static void SetVoiceOscillatorAmplitude(Oscillator oscillator, double amplitude)
+        {
+            oscillator.Amplitude = OscillatorAmplitudeRange.Clamp(amplitude);
+        }
+
+        private static void SetVoiceOscillatorWaveformType(Oscillator oscillator, WaveformType waveformType)
+        {
+            if (!SupportedOscillatorWaveformTypes.Contains(waveformType))
+            {
+                // Not sure if it should return or throw an exception.
+
                 return;
+
+                //throw new InvalidOperationException($"WaveformType for oscillators \"{waveformType}\" not supported.");
             }
 
-            if (count > tempAudioSourceMixBuffer.Length)
-            {
-                throw new InvalidOperationException("This should never be reached!");
-            }
-
-            int audioSourceCount = audioSources.Count;
-
-            Span<float> mixBuffer = new Span<float>(tempAudioSourceMixBuffer, 0, count);
-
-            for (int index = 0; index < audioSourceCount; index++)
-            {
-                mixBuffer.Clear();
-
-                int read = audioSources[index].Read(mixBuffer);
-
-                for (int i = 0; i < read; i++)
-                {
-                    buffer[offset + i] += mixBuffer[i];
-                }
-            }
+            oscillator.WaveformType = waveformType;
         }
 
-        private void MixAudioEffects(float[] buffer, int offset, int count)
+        private static void SetVoiceOscillatorDetuneCents(Oscillator oscillator, double cents)
         {
-            Span<float> bufferSpan = new Span<float>(buffer, offset, count);
-
-            for (int index = 0; index < effects.Count; index++)
-            {
-                effects[index].Apply(bufferSpan);
-            }
+            oscillator.DetuneCents = OscillatorDetuneCentsRange.Clamp(cents);
         }
 
-        private void FinalMix(float[] buffer, int offset, int count, double leftMix, double rightMix)
+        private static InvalidOperationException InvalidCommandIDException(int commandID)
         {
-            for (int index = 0; index < count; index += 2)
-            {
-                int bufferIndex = offset + index;
-
-                double leftSample = buffer[bufferIndex] * leftMix;
-                double rightSample = buffer[bufferIndex + 1] * rightMix;
-
-                leftSample = ClampSample(leftSample);
-                rightSample = ClampSample(rightSample);
-
-                WriteStereoToStereo(buffer, offset, index, leftSample, rightSample);
-            }
-        }
-
-        public static void WriteMonoToStereo(float[] buffer, int offset, int index, double sample)
-        {
-            buffer[offset + index] = (float)sample;
-            buffer[offset + index + 1] = (float)sample;
-        }
-
-        public static void WriteStereoToStereo(float[] buffer, int offset, int index, double leftSample, double rightSample)
-        {
-            buffer[offset + index] = (float)leftSample;
-            buffer[offset + index + 1] = (float)rightSample;
-        }
-
-        private static double ClampSample(double sample)
-        {
-            if (sample < -1.0)
-            {
-                return -1.0;
-            }
-
-            if (sample > 1.0)
-            {
-                return 1.0;
-            }
-
-            return sample;
+            return new InvalidOperationException($"Invalid command ID: \"{commandID}\".");
         }
 
         private static void ResetVoice(Voice voice)
         {
             voice.IsOff = true;
 
-            voice.AdsrEnvelope.Reset();
+            voice.Adsr.Reset();
 
             ResetOscillators(voice);
         }

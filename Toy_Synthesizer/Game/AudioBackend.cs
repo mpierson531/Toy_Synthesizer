@@ -17,30 +17,18 @@ using Microsoft.Xna.Framework;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
-namespace Toy_Synthesizer.Game.Synthesizer.Backend
+namespace Toy_Synthesizer.Game
 {
-    public class Backend : Disposable
+    public class AudioBackend : Disposable
     {
+        public const int SAMPLE_RATE = 44100;
+
         private readonly Game game;
 
-        private readonly PolyphonicSynthesizer polyphonic;
         private readonly MMDevice outputDevice;
         private readonly WasapiOut output;
 
-        private ParallelOptions parallelOptions;
-
-        public ParallelOptions ParallelOptions
-        {
-            get => parallelOptions;
-            set => parallelOptions = value;
-        }
-
-        public PolyphonicSynthesizer PolyphonicSynthesizer
-        {
-            get => polyphonic;
-        }
-
-        public Backend(Game game)
+        public AudioBackend(Game game, ISampleProvider sampleProvider)
         {
             this.game = game;
 
@@ -48,9 +36,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
             output = new WasapiOut(outputDevice, AudioClientShareMode.Shared, useEventSync: false, latency: 50);
 
-            polyphonic = new PolyphonicSynthesizer();
-
-            output.Init(polyphonic);
+            output.Init(sampleProvider);
             output.Play();
         }
 

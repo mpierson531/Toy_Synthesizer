@@ -4,7 +4,6 @@ using GeoLib.GeoUtils.Pooling;
 using GeoLib.GeoUtils.Collections;
 
 using Toy_Synthesizer.Game.Data;
-using Toy_Synthesizer.Game.Plugins.Builtin.Core.Help;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Help
 {

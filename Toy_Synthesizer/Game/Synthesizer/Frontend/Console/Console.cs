@@ -18,13 +18,11 @@ using GeoLib.GeoUtils.Pooling;
 using GeoLib.GeoUtils.Collections;
 
 using Toy_Synthesizer.Game.UI;
-using Toy_Synthesizer.Game.Plugins.Builtin.Core.Help;
-using Toy_Synthesizer.Game.Synthesizer.Frontend.Help;
-using Toy_Synthesizer.Game.Plugins.Builtin.Core.Console;
-using Toy_Synthesizer.Game.Synthesizer.Frontend.Scripting;
-
-using Toy_Synthesizer.Game.Synthesizer.Backend;
 using Toy_Synthesizer.Game.Midi;
+using Toy_Synthesizer.Game.Synthesizer;
+using Toy_Synthesizer.Game.Synthesizer.Backend;
+using Toy_Synthesizer.Game.Synthesizer.Frontend.Help;
+using Toy_Synthesizer.Game.Synthesizer.Frontend.Scripting;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Console
 {
@@ -324,7 +322,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Console
             }
         }
 
-        public void InitUI(Stage stage)
+        public void InitUI()
         {
             if (isInitialized)
             {
@@ -402,16 +400,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Console
             inputTextTint = defaultInputTextTint;
 
             SetUITints();
-
-            stage.OnResize += delegate (Vec2f previousSize, Vec2f newSize)
-            {
-                if (!IsShowing)
-                {
-                    return;
-                }
-
-                CheckAndSetBounds();
-            };
         }
 
         private float GetTargetFontScale(float currentFontSize)
@@ -542,6 +530,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Console
 
         public void WindowResized(int width, int height)
         {
+            CheckAndSetBounds();
+
             if (!game.HasUIWidget(mainGroup))
             {
                 Vec2f previousWindowSize = (Vec2f)game.Geo.Display.PreviousWindowSize;
@@ -644,8 +634,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Console
             {
                 new Variable("Game", game),
                 new Variable("Console", this),
-                new Variable("Synthesizer", game.Synthesizer),
-                new Variable("Polyphonic", game.Synthesizer.Backend.PolyphonicSynthesizer)
+                new Variable("Synthesizer", game.Synthesizer)
             };
         }
 

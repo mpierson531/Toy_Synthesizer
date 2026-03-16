@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Backend
 {
-    public enum WaveformType
+    public enum WaveformType : int
     {
         Sine,
         Triangle,

@@ -9,8 +9,8 @@ using GeoLib.GeoUtils.Collections;
 using Toy_Synthesizer.Game.UI;
 using Toy_Synthesizer.Game.Data;
 using Toy_Synthesizer.Game.Data.Generic;
-using Toy_Synthesizer.Game.Synthesizer.Backend;
 using Toy_Synthesizer.Game.Midi;
+using Toy_Synthesizer.Game.Synthesizer.Backend;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 {

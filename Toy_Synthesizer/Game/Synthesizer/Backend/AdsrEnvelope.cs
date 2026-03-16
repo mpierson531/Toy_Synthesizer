@@ -8,6 +8,7 @@ using GeoLib;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Backend
 {
+    // TODO: implement commands.
     public class AdsrEnvelope : ICopyable
     {
         public int SampleRate;
@@ -27,7 +28,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         public AdsrEnvelope(int sampleRate)
         {
-            this.SampleRate = sampleRate;
+            SampleRate = sampleRate;
         }
 
         public void NoteOn()

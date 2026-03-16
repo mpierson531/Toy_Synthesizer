@@ -364,7 +364,6 @@ namespace Toy_Synthesizer.Game.UI
 
         public float TooltipHoverTime { get; set; }
         public float TooltipOffTime { get; set; }
-        public readonly float TooltipAdditionalCursorOffset;
         public readonly Vec2f TooltipSizePadding;
 
         public readonly float WindowLineCheckTolerance;
@@ -738,7 +737,6 @@ namespace Toy_Synthesizer.Game.UI
 
             TooltipHoverTime = 0.4f;
             TooltipOffTime = 0f;
-            TooltipAdditionalCursorOffset = game.ScaleByDisplayResolution_Min(1f);
             TooltipSizePadding = game.ScaleByDisplayResolution(new Vec2f(6f));
 
             BackgroundedLabelTint = new Color(75, 75, 75, 255);
@@ -2837,6 +2835,15 @@ namespace Toy_Synthesizer.Game.UI
                                  background);
         }
 
+        public LabelTooltip AddTextTooltip(Widget widget, string text)
+        {
+            LabelTooltip tooltip = TextTooltip(text);
+
+            widget.AddListener(tooltip);
+
+            return tooltip;
+        }
+
         public LabelTooltip TextTooltip(string text)
         {
             return TextTooltip(text, DefaultLabelTooltipCursorOffsetGetter);
@@ -2867,6 +2874,11 @@ namespace Toy_Synthesizer.Game.UI
             tooltip.OnShow += delegate (Label label)
             {
                 label.CharacterSpacing = game.Config.Game.GlobalCharacterSpacing;
+
+                if (label.Font != MainFont)
+                {
+                    label.Font = MainFont;
+                }
             };
 
             return tooltip;
@@ -2876,18 +2888,12 @@ namespace Toy_Synthesizer.Game.UI
         {
             // Positions the bottom-left corner of the Label at the cursor position
 
-            return new Vec2f(0f, -label.Size.Y - TooltipAdditionalCursorOffset);
+            return new Vec2f(0f, -label.Size.Y - ComputeTooltipAdditionalCursorOffset());
         }
 
-        public Label LabelForTooltip(Vec2f size, string text)
+        public float ComputeTooltipAdditionalCursorOffset()
         {
-            Label.LabelStyle style = new Label.LabelStyle
-            {
-                Normal = RenderData.Texture(TooltipTexture),
-                TextNormal = new TextRenderData { FontColor = GeneralTextColor }
-            };
-
-            return new Label(Vec2f.Zero, size, MainFont, text, style, Vec2f.Half, wrapText: false, fitText: true, addDefaultListeners: false);
+            return ScaleMin(game.ScaleByDisplayResolution_Min(1f));
         }
 
         public LineData[] GetCheckmarkUncheckedLineData()

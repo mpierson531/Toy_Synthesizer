@@ -90,19 +90,19 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Update="Toy Simulator Open-source Licenses\DynamicExpresso.txt">
+		<None Update="Toy Synthesizer Open-source Licenses\DynamicExpresso.txt">
 		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
-		<None Update="Toy Simulator Open-source Licenses\FontStashSharp.txt">
+		<None Update="Toy Synthesizer Open-source Licenses\FontStashSharp.txt">
 		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
-		<None Update="Toy Simulator Open-source Licenses\MessagePack.txt">
+		<None Update="Toy Synthesizer Open-source Licenses\MessagePack.txt">
 		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
-		<None Update="Toy Simulator Open-source Licenses\MonoGame.txt">
+		<None Update="Toy Synthesizer Open-source Licenses\MonoGame.txt">
 		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
-		<None Update="Toy Simulator Open-source Licenses\Open Sauce One OFL.txt">
+		<None Update="Toy Synthesizer Open-source Licenses\Open Sauce One OFL.txt">
 		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
 		<None Update="Toy Synthesizer Open-source Licenses\Open Sauce One OFL.txt">

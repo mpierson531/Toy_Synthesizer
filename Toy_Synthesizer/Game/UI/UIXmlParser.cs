@@ -758,7 +758,7 @@ namespace Toy_Synthesizer.Game.UI
         {
             foreach (var attr in attributes)
             {
-                // name becomes lowercase here, so switch cases must be lowercase
+                // Name becomes lowercase here, so switch cases must be lowercase.
                 string name = attr.Name.LocalName.ToLower();
                 string value = attr.Value;
 

@@ -2,9 +2,7 @@
 
 using System.Text;
 
-using Toy_Synthesizer.Game.Synthesizer.Frontend.Help;
-
-namespace Toy_Synthesizer.Game.Plugins.Builtin.Core.Help
+namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Help
 {
     public static class HelpItemHelpers
     {
@@ -24,7 +22,7 @@ namespace Toy_Synthesizer.Game.Plugins.Builtin.Core.Help
             }
 
             // Probably exaggerated, but easier than trying to be precise.
-            builder.EnsureCapacity(500 + (newLinesBefore * Game.NewLineLength) + (newLinesAfter * Game.NewLineLength) + (tabs * Game.Tab.Length));
+            builder.EnsureCapacity(500 + newLinesBefore * Game.NewLineLength + newLinesAfter * Game.NewLineLength + tabs * Game.Tab.Length);
 
             builder.Append("HelpItem");
             builder.Append(Game.NewLine);
