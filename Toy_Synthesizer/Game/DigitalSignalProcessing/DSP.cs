@@ -92,11 +92,9 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             {
                 lock (lockObject)
                 {
-                    double previous = globalGain;
-
                     globalGain = GlobalGainRange.Clamp(value);
 
-                    OnGlobalGainChanged?.Invoke(previous, globalGain);
+                    OnGlobalGainChanged?.Invoke(globalGain);
                 }
             }
         }
@@ -109,11 +107,9 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             {
                 lock (lockObject)
                 {
-                    double previous = masterVolume;
-
                     masterVolume = MasterVolumeRange.Clamp(value);
 
-                    OnMasterVolumeChanged?.Invoke(previous, masterVolume);
+                    OnMasterVolumeChanged?.Invoke(masterVolume);
                 }
             }
         }
@@ -126,11 +122,9 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             {
                 lock (lockObject)
                 {
-                    double previous = globalPan;
-
                     globalPan = GlobalPanRange.Clamp(value);
 
-                    OnGlobalPanChanged?.Invoke(previous, globalPan);
+                    OnGlobalPanChanged?.Invoke(globalPan);
                 }
             }
         }
@@ -163,9 +157,9 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
         public event Action<PolyphonicSynthesizer, Voice> OnVoiceAdded;
         public event Action<PolyphonicSynthesizer, Voice> OnVoiceRemoved;
 
-        public event Action<double, double> OnGlobalGainChanged;
-        public event Action<double, double> OnMasterVolumeChanged;
-        public event Action<double, double> OnGlobalPanChanged;
+        public event Action<double> OnGlobalGainChanged;
+        public event Action<double> OnMasterVolumeChanged;
+        public event Action<double> OnGlobalPanChanged;
 
         public DSP(int sampleRate)
         {

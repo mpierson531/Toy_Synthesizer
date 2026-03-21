@@ -41,6 +41,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                    positionChildren: false,
                    sizeChildren: false)
         {
+            this.game = game;
+
             Style.RenderData.SetColor(game.UIManager.BackgroundedLabelTint);
 
             Adapters.Add(new PreciseGroupLayoutAdapter());

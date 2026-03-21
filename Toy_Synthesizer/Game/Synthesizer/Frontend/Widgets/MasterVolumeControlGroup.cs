@@ -7,14 +7,18 @@ using System.Threading.Tasks;
 using GeoLib;
 using GeoLib.GeoGraphics;
 using GeoLib.GeoGraphics.UI;
+using GeoLib.GeoGraphics.UI.Data;
+using GeoLib.GeoGraphics.UI.Data.Generic;
 using GeoLib.GeoGraphics.UI.Widgets;
 using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
+using NAudio.Gui;
+
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
 using Toy_Synthesizer.Game.Synthesizer.Backend;
 using Toy_Synthesizer.Game.UI;
-using Toy_Synthesizer.Game.DigitalSignalProcessing;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
@@ -26,9 +30,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private TextField volumeSliderDisplayTextField;
         private TextButton resetButton;
 
-        private bool settingValueFromSlider = false;
-        private bool settingValueFromDisplayTextField = false;
-        private bool settingValue = false;
+        private PropertyBindable<double> volumePropertyBindable;
+        private ConvertingPropertyBinding<double, float> sliderBinding;
+        private ConvertingPropertyBinding<double, string> textFieldBinding;
 
         public MasterVolumeControlGroup(Vec2f position, Vec2f size, UIManager uiManager)
             : base(position, size,
@@ -37,6 +41,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                    sizeChildren: false)
         {
             dsp = uiManager.Game.DSP;
+
+            dsp.OnMasterVolumeChanged += DSP_OnMasterVolumeChanged;
+
+            volumePropertyBindable = new PropertyBindable<double>("Master Volume", GeoMath.ScalarToPercent(dsp.MasterVolume));
+
+            volumePropertyBindable.OnValueChangedTyped += SetVolume;
 
             Style.RenderData.SetColor(uiManager.BackgroundedLabelTint);
 
@@ -47,8 +57,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             new UIXmlParser(uiManager).Parse(uiXml, rootParent: this);
 
             InitWidgets();
+        }
 
-            dsp.OnMasterVolumeChanged += Synthesizer_OnMasterVolumeChanged;
+        private void DSP_OnMasterVolumeChanged(double newValue)
+        {
+            volumePropertyBindable.Value = newValue;
         }
 
         private void InitWidgets()
@@ -57,93 +70,21 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             volumeSliderDisplayTextField = FindAsByNameDeepSearch<TextField>(VOLUME_SLIDER_DISPLAY_TEXTFIELD_NAME);
             resetButton = FindAsByNameDeepSearch<TextButton>(RESET_BUTTON_NAME);
 
-            volumeSlider.OnValueChange += Slider_OnValueChanged;
-            volumeSliderDisplayTextField.OnTextInput += SliderDisplayTextField_OnTextInput;
+            sliderBinding = volumeSlider.BindPropertyConverting(volumePropertyBindable);
 
-            SetSlider();
-            SetDisplayTextField();
+            textFieldBinding = volumeSliderDisplayTextField.BindProperty_Number(volumePropertyBindable);
 
             resetButton.OnClick += ResetButton_OnClick;
         }
 
-        private void Slider_OnValueChanged(Slider slide, float previousValue, float newValue)
-        {
-            if (settingValueFromSlider)
-            {
-                settingValueFromSlider = false;
-
-                return;
-            }
-
-            SetVolume(newValue, setSlider: false, setDisplay: true);
-        }
-
-        private void SliderDisplayTextField_OnTextInput(string text)
-        {
-            if (settingValueFromDisplayTextField)
-            {
-                settingValueFromDisplayTextField = false;
-
-                return;
-            }
-
-            double newValue = GeoMath.ParseOrDefault<double>(text);
-
-            SetVolume(newValue, setSlider: true, setDisplay: false);
-        }
-
-        private void Synthesizer_OnMasterVolumeChanged(double previousValue, double newValue)
-        {
-            if (settingValue)
-            {
-                return;
-            }
-
-            SetSlider();
-            SetDisplayTextField();
-        }
-
         private void ResetButton_OnClick()
         {
-            dsp.MasterVolume = DSP.DEFAULT_MASTER_VOLUME;
+            volumePropertyBindable.Value = GeoMath.ScalarToPercent(DSP.DEFAULT_MASTER_VOLUME);
         }
 
-        private void SetVolume(double newValue_Percentage, bool setSlider, bool setDisplay)
+        private void SetVolume(double newValue)
         {
-            if (settingValue)
-            {
-                return;
-            }
-
-            settingValue = true;
-
-            double newValue_Scalar = GeoMath.PercentToScalar(newValue_Percentage);
-
-            dsp.MasterVolume = newValue_Scalar;
-
-            if (setSlider)
-            {
-                SetSlider();
-            }
-
-            if (setDisplay)
-            {
-                SetDisplayTextField();
-            }
-
-            settingValue = false;
-        }
-
-        private void SetSlider()
-        {
-            settingValueFromSlider = true;
-
-            volumeSlider.CurrentValue = (float)GeoMath.ScalarToPercent(dsp.MasterVolume);
-        }
-
-        private void SetDisplayTextField()
-        {
-            volumeSliderDisplayTextField.Text = ((float)GeoMath.ScalarToPercent(dsp.MasterVolume)).ToString();
+            dsp.MasterVolume = GeoMath.PercentToScalar(newValue);
         }
 
         private string GetUIXml()
@@ -172,7 +113,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Size=""(65%, 40%)""
                  NumberMinValue=""{masterVolumePercentageRange.Min}""
                  NumberMaxValue=""{masterVolumePercentageRange.Max}""
-                 NumberDefaultValue=""{DSP.DEFAULT_MASTER_VOLUME}""
+                 NumberDefaultValue=""{GeoMath.ScalarToPercent(DSP.DEFAULT_MASTER_VOLUME)}""
                  DragIncrement=""1.0""
                  Name=""{VOLUME_SLIDER_NAME}""/>
 
@@ -186,6 +127,19 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Name=""{VOLUME_SLIDER_DISPLAY_TEXTFIELD_NAME}""/>
 
             </Layout>";
+        }
+
+        protected override void DisposeInternal(bool fromFinalizer)
+        {
+            base.DisposeInternal(fromFinalizer);
+
+            volumePropertyBindable = null;
+
+            sliderBinding.Unbind();
+            textFieldBinding.Unbind();
+
+            sliderBinding = null;
+            textFieldBinding = null;
         }
 
 

@@ -8,6 +8,8 @@ using GeoLib;
 using GeoLib.GeoGraphics;
 using GeoLib.GeoGraphics.UI;
 using GeoLib.GeoGraphics.UI.Widgets;
+using GeoLib.GeoGraphics.UI.Data;
+using GeoLib.GeoGraphics.UI.Data.Generic;
 using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
@@ -20,15 +22,15 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
     public class GlobalGainControlGroup : GroupWidget
     {
-        private DigitalSignalProcessing.DSP dsp;
+        private DSP dsp;
 
         private Slider gainSlider;
         private TextField gainSliderDisplayTextField;
         private TextButton resetButton;
 
-        private bool settingValueFromSlider = false;
-        private bool settingValueFromDisplayTextField = false;
-        private bool settingValue = false;
+        private PropertyBindable<double> gainPropertyBindable;
+        private ConvertingPropertyBinding<double, float> sliderBinding;
+        private ConvertingPropertyBinding<double, string> textFieldBinding;
 
         public GlobalGainControlGroup(Vec2f position, Vec2f size, UIManager uiManager)
             : base(position, size,
@@ -38,17 +40,21 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             dsp = uiManager.Game.DSP;
 
+            gainPropertyBindable = new PropertyBindable<double>("Global Gain", GeoMath.ScalarToPercent(dsp.GlobalGain));
+
+            gainPropertyBindable.OnValueChangedTyped += SetGain;
+
+            dsp.OnGlobalGainChanged += DSP_OnGlobalGainChanged;
+
             Style.RenderData.SetColor(uiManager.BackgroundedLabelTint);
 
             Adapters.Add(new PreciseGroupLayoutAdapter());
 
             string uiXml = GetUIXml();
 
-            new UIXmlParser(uiManager).Parse(uiXml, rootParent: this);
+            UIXmlParser.Parse(uiManager, uiXml, rootParent: this);
 
             InitWidgets();
-
-            dsp.OnGlobalGainChanged += Synthesizer_OnGlobalGainChanged;
         }
 
         private void InitWidgets()
@@ -57,95 +63,26 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             gainSliderDisplayTextField = FindAsByNameDeepSearch<TextField>(GLOBAL_GAIN_SLIDER_DISPLAY_TEXTFIELD_NAME);
             resetButton = FindAsByNameDeepSearch<TextButton>(RESET_BUTTON_NAME);
 
-            gainSlider.OnValueChange += Slider_OnValueChanged;
-            gainSliderDisplayTextField.OnTextInput += SliderDisplayTextField_OnTextInput;
+            sliderBinding = gainSlider.BindPropertyConverting(gainPropertyBindable);
 
-            SetSlider();
-            SetDisplayTextField();
+            textFieldBinding = gainSliderDisplayTextField.BindProperty_Number(gainPropertyBindable);
 
             resetButton.OnClick += ResetButton_OnClick;
         }
 
-        private void Slider_OnValueChanged(Slider slide, float previousValue, float newValue)
+        private void DSP_OnGlobalGainChanged(double newValue)
         {
-            if (settingValueFromSlider)
-            {
-                settingValueFromSlider = false;
-
-                return;
-            }
-
-            SetGlobalGain(newValue, setSlider: false, setDisplay: true);
+            gainPropertyBindable.Value = newValue;
         }
 
-        private void SliderDisplayTextField_OnTextInput(string text)
+        private void SetGain(double value)
         {
-            if (settingValueFromDisplayTextField)
-            {
-                settingValueFromDisplayTextField = false;
-
-                return;
-            }
-
-            double newValue = GeoMath.ParseOrDefault<double>(text);
-
-            SetGlobalGain(newValue, setSlider: true, setDisplay: false);
-        }
-
-        private void Synthesizer_OnGlobalGainChanged(double previousValue, double newValue)
-        {
-            if (settingValue)
-            {
-                return;
-            }
-
-            SetSlider();
-            SetDisplayTextField();
+            dsp.GlobalGain = GeoMath.PercentToScalar(value);
         }
 
         private void ResetButton_OnClick()
         {
-            // The slider and display textfield will be set through Synthesizer_OnGlobalGainChanged.
-
-            dsp.GlobalGain = DSP.DEFAULT_GLOBAL_GAIN;
-        }
-
-        private void SetGlobalGain(double newValue_Percentage, bool setSlider, bool setDisplay)
-        {
-            if (settingValue)
-            {
-                return;
-            }
-
-            settingValue = true;
-
-            double newValue_Scalar = GeoMath.PercentToScalar(newValue_Percentage);
-
-            dsp.GlobalGain = newValue_Scalar;
-
-            if (setSlider)
-            {
-                SetSlider();
-            }
-
-            if (setDisplay)
-            {
-                SetDisplayTextField();
-            }
-
-            settingValue = false;
-        }
-
-        private void SetSlider()
-        {
-            settingValueFromSlider = true;
-
-            gainSlider.CurrentValue = (float)GeoMath.ScalarToPercent(dsp.GlobalGain);
-        }
-
-        private void SetDisplayTextField()
-        {
-            gainSliderDisplayTextField.Text = ((float)GeoMath.ScalarToPercent(dsp.GlobalGain)).ToString();
+            gainPropertyBindable.Value = GeoMath.ScalarToPercent(DSP.DEFAULT_GLOBAL_GAIN);
         }
 
         private string GetUIXml()
@@ -174,7 +111,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Size=""(65%, 40%)""
                  NumberMinValue=""{globalGainPercentageRange.Min}""
                  NumberMaxValue=""{globalGainPercentageRange.Max}""
-                 NumberDefaultValue=""{DSP.DEFAULT_GLOBAL_GAIN}""
+                 NumberDefaultValue=""{GeoMath.ScalarToPercent(DSP.DEFAULT_GLOBAL_GAIN)}""
                  DragIncrement=""1.0""
                  Name=""{GLOBAL_GAIN_SLIDER_NAME}""/>
 
@@ -190,6 +127,18 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             </Layout>";
         }
 
+        protected override void DisposeInternal(bool fromFinalizer)
+        {
+            base.DisposeInternal(fromFinalizer);
+
+            gainPropertyBindable = null;
+
+            sliderBinding.Unbind();
+            textFieldBinding.Unbind();
+
+            sliderBinding = null;
+            textFieldBinding = null;
+        }
 
         private const string GLOBAL_GAIN_SLIDER_NAME = "GlobalGainSlider";
         private const string GLOBAL_GAIN_SLIDER_DISPLAY_TEXTFIELD_NAME = "GlobalGainDisplayTextField";

@@ -45,7 +45,7 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
 
         public static AudioSourceCommand SetVoiceMix(Voice voice, double mix)
         {
-            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_CenterFrequency, valueStorage: RawValueStorage_64B.From(mix), objectValue: voice);
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Mix, valueStorage: RawValueStorage_64B.From(mix), objectValue: voice);
         }
 
         // Voice ADSR commands

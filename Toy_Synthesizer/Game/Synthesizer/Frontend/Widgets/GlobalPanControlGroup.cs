@@ -7,14 +7,18 @@ using System.Threading.Tasks;
 using GeoLib;
 using GeoLib.GeoGraphics;
 using GeoLib.GeoGraphics.UI;
+using GeoLib.GeoGraphics.UI.Data;
+using GeoLib.GeoGraphics.UI.Data.Generic;
 using GeoLib.GeoGraphics.UI.Widgets;
 using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
+using NAudio.Gui;
+
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
 using Toy_Synthesizer.Game.Synthesizer.Backend;
 using Toy_Synthesizer.Game.UI;
-using Toy_Synthesizer.Game.DigitalSignalProcessing;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
@@ -26,9 +30,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private TextField panSliderDisplayTextField;
         private TextButton resetButton;
 
-        private bool settingValueFromSlider = false;
-        private bool settingValueFromDisplayTextField = false;
-        private bool settingValue = false;
+        private PropertyBindable<double> panPropertyBindable;
+        private ConvertingPropertyBinding<double, float> sliderBinding;
+        private ConvertingPropertyBinding<double, string> textFieldBinding;
 
         public GlobalPanControlGroup(Vec2f position, Vec2f size, UIManager uiManager)
             : base(position, size,
@@ -37,6 +41,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                    sizeChildren: false)
         {
             dsp = uiManager.Game.DSP;
+
+            dsp.OnGlobalPanChanged += DSP_OnGlobalPanChanged;
+
+            panPropertyBindable = new PropertyBindable<double>("Global Pan", GeoMath.ScalarToPercent(dsp.GlobalPan));
+
+            panPropertyBindable.OnValueChangedTyped += SetPan;
 
             Style.RenderData.SetColor(uiManager.BackgroundedLabelTint);
 
@@ -47,8 +57,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             new UIXmlParser(uiManager).Parse(uiXml, rootParent: this);
 
             InitWidgets();
-
-            dsp.OnGlobalPanChanged += Synthesizer_OnGlobalPanChanged;
         }
 
         private void InitWidgets()
@@ -57,93 +65,26 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             panSliderDisplayTextField = FindAsByNameDeepSearch<TextField>(PAN_SLIDER_DISPLAY_TEXTFIELD_NAME);
             resetButton = FindAsByNameDeepSearch<TextButton>(RESET_BUTTON_NAME);
 
-            panSlider.OnValueChange += Slider_OnValueChanged;
-            panSliderDisplayTextField.OnTextInput += SliderDisplayTextField_OnTextInput;
+            sliderBinding = panSlider.BindPropertyConverting(panPropertyBindable);
 
-            SetSlider();
-            SetDisplayTextField();
+            textFieldBinding = panSliderDisplayTextField.BindProperty_Number(panPropertyBindable);
 
             resetButton.OnClick += ResetButton_OnClick;
         }
 
-        private void Slider_OnValueChanged(Slider slide, float previousValue, float newValue)
+        private void DSP_OnGlobalPanChanged(double newValue)
         {
-            if (settingValueFromSlider)
-            {
-                settingValueFromSlider = false;
-
-                return;
-            }
-
-            SetPan(newValue, setSlider: false, setDisplay: true);
-        }
-
-        private void SliderDisplayTextField_OnTextInput(string text)
-        {
-            if (settingValueFromDisplayTextField)
-            {
-                settingValueFromDisplayTextField = false;
-
-                return;
-            }
-
-            double newValue = GeoMath.ParseOrDefault<double>(text);
-
-            SetPan(newValue, setSlider: true, setDisplay: false);
-        }
-
-        private void Synthesizer_OnGlobalPanChanged(double previousValue, double newValue)
-        {
-            if (settingValue)
-            {
-                return;
-            }
-
-            SetSlider();
-            SetDisplayTextField();
+            panPropertyBindable.Value = newValue;
         }
 
         private void ResetButton_OnClick()
         {
-            dsp.GlobalPan = DSP.DEFAULT_GLOBAL_PAN;
+            panPropertyBindable.Value = GeoMath.ScalarToPercent(DSP.DEFAULT_GLOBAL_PAN);
         }
 
-        private void SetPan(double newValue_Percentage, bool setSlider, bool setDisplay)
+        private void SetPan(double newValue)
         {
-            if (settingValue)
-            {
-                return;
-            }
-
-            settingValue = true;
-
-            double newValue_Scalar = GeoMath.PercentToScalar(newValue_Percentage);
-
-            dsp.GlobalPan = newValue_Scalar;
-
-            if (setSlider)
-            {
-                SetSlider();
-            }
-
-            if (setDisplay)
-            {
-                SetDisplayTextField();
-            }
-
-            settingValue = false;
-        }
-
-        private void SetSlider()
-        {
-            settingValueFromSlider = true;
-
-            panSlider.CurrentValue = (float)GeoMath.ScalarToPercent(dsp.GlobalPan);
-        }
-
-        private void SetDisplayTextField()
-        {
-            panSliderDisplayTextField.Text = ((float)GeoMath.ScalarToPercent(dsp.GlobalPan)).ToString();
+            dsp.GlobalPan = GeoMath.PercentToScalar(newValue);
         }
 
         private string GetUIXml()
@@ -172,7 +113,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Size=""(65%, 40%)""
                  NumberMinValue=""{globalPanPercentageRange.Min}""
                  NumberMaxValue=""{globalPanPercentageRange.Max}""
-                 NumberDefaultValue=""{DSP.DEFAULT_GLOBAL_PAN}""
+                 NumberDefaultValue=""{GeoMath.ScalarToPercent(DSP.DEFAULT_GLOBAL_PAN)}""
                  DragIncrement=""1.0""
                  Name=""{PAN_SLIDER_NAME}""/>
 
@@ -186,6 +127,19 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Name=""{PAN_SLIDER_DISPLAY_TEXTFIELD_NAME}""/>
 
             </Layout>";
+        }
+
+        protected override void DisposeInternal(bool fromFinalizer)
+        {
+            base.DisposeInternal(fromFinalizer);
+
+            panPropertyBindable = null;
+
+            sliderBinding.Unbind();
+            textFieldBinding.Unbind();
+
+            sliderBinding = null;
+            textFieldBinding = null;
         }
 
 
