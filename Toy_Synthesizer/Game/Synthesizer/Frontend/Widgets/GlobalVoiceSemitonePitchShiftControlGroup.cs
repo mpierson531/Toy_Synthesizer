@@ -61,30 +61,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             controlKeySlider.OnWidgetValueChanged += ControlSlider_OnValueChanged;
         }
 
-        private void PolySynth_ShiftSemitoneAmountChanged(double newValue)
-        {
-            if (settingShiftAmount)
-            {
-                settingShiftAmount = false;
-
-                return;
-            }
-
-            shiftKeySlider.SetWidgetValues(newValue);
-        }
-
-        private void PolySynth_ControlSemitoneAmountChanged(double newValue)
-        {
-            if (settingControlAmount)
-            {
-                settingControlAmount = false;
-
-                return;
-            }
-
-            controlKeySlider.SetWidgetValues(newValue);
-        }
-
         private void ShiftSlider_OnValueChanged(double newValue)
         {
             SetShiftRaw(newValue);

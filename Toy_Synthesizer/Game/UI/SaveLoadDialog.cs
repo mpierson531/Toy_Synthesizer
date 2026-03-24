@@ -365,7 +365,7 @@ namespace Toy_Synthesizer.Game.UI
                 SetNoButton_OnClick_Common();
             };
 
-            OnResize = delegate (Vec2f previousSize, Vec2f newSize)
+            OnResize += delegate (Vec2f previousSize, Vec2f newSize)
             {
                 SetButtonsBounds(withNoButton: true);
             };
@@ -375,7 +375,7 @@ namespace Toy_Synthesizer.Game.UI
         {
             currentSaveAsAndLoadOnGroupDoubleClick = onGroupDoubleClick;
 
-            OnResize = delegate (Vec2f previousSize, Vec2f newSize)
+            OnResize += delegate (Vec2f previousSize, Vec2f newSize)
             {
                 SetButtonsBounds(withNoButton: false);
 

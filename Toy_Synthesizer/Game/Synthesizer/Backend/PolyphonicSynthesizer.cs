@@ -452,6 +452,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     SetVoiceCenterFrequency((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
                     break;
 
+                case SynthesizerCommandType.SetVoice_Name:
+                    SetVoiceName((Voice)command.ObjectValue, (string)command.ObjectValue2);
+                    break;
+
                 case SynthesizerCommandType.SetVoice_Mix:
                     SetVoiceMix((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
                     break;
@@ -521,7 +525,14 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         private static void SetVoiceCenterFrequency(Voice voice,  double frequency)
         {
+            Game.Instance.LogManager.Debug(frequency);
+
             voice.CenterFrequency = CenterFrequencyRange.Clamp(frequency);
+        }
+
+        private static void SetVoiceName(Voice voice, string name)
+        {
+            voice.Name = name;
         }
 
         private static void SetVoiceMix(Voice voice, double mix)

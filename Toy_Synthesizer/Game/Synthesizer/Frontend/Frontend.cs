@@ -36,7 +36,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         public const double DEFAULT_SHIFT_SEMITONE_AMOUNT = 12.0;
         public const double DEFAULT_CONTROL_SEMITONE_AMOUNT = -12.0;
         public static readonly NumberRange<double> ShiftAndControlSemitoneRange;
-        private static readonly Dictionary<Keys, Voice[]> defaultKeyVoiceBindings;
+        private static readonly Dictionary<Keys, ImmutableArray<Voice>> defaultKeyVoiceBindings;
 
         static Frontend()
         {
@@ -47,6 +47,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
         private readonly UIXmlParser uiXmlParser;
 
+        private readonly VoiceUIManager voiceUIManager;
+
         private readonly Game game;
 
         private readonly Dictionary<Keys, Voice[]> keyVoiceBindings;
@@ -54,8 +56,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         private readonly ViewableList<Property<Voice>> voiceProperties;
 
         private readonly Console.Console console;
-
-        private GroupWidget voicesGroup;
 
         private double shiftSemitoneAmount;
         private double controlSemitoneAmount;
@@ -118,6 +118,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             uiXmlParser = new UIXmlParser(game.UIManager);
 
+            voiceUIManager = new VoiceUIManager(game, uiXmlParser);
+
             currentShiftShiftedSemitoneAmount = null;
             currentControlShiftedSemitoneAmount = null;
 
@@ -129,9 +131,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             keyVoiceBindings = new Dictionary<Keys, Voice[]>(defaultKeyVoiceBindings.Count);
 
-            foreach (KeyValuePair<Keys, Voice[]> binding in defaultKeyVoiceBindings)
+            foreach (KeyValuePair<Keys, ImmutableArray<Voice>> binding in defaultKeyVoiceBindings)
             {
-                Voice[] voicesCopy = ArrayUtils.ArrayCopy(binding.Value, voice => voice.Copy(deepCopy: true));
+                Voice[] voicesCopy = binding.Value.ToArray(voice => voice.Copy(deepCopy: true));
 
                 keyVoiceBindings.Add(binding.Key, voicesCopy);
             }
@@ -178,7 +180,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             InitGlobalPanUI();
             InitShiftAndControlKeyShiftUI();
             InitRecordingUI();
-            InitVoicesUI();
+
+            voiceUIManager.InitUI();
 
             InitConsole();
         }
@@ -251,80 +254,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             ViewableList<Widget> widgets = uiXmlParser.Parse(xml);
 
             game.AddUIWidgets(widgets);
-        }
-
-        private void InitVoicesUI()
-        {
-            string xml = @"
-<Layout>
-
-    <Window Title=""Voices"" X=""50"" Y=""50"" W=""400"" H=""600"">
-
-        <ScrollPane X=""0%"" Y=""0%"" W=""100%"" H=""95%""/>
-
-    </Window>
-
-</Layout>";
-
-
-            ViewableList<Widget> widgets = uiXmlParser.Parse(xml);
-
-            Window window = (Window)widgets[0];
-
-            voicesGroup = (GroupWidget)window[window.ComputeEffectiveChildBeginOffset()];
-
-            float currentY = voicesGroup.Position.Y;
-
-            AudioSourceCommand forEachVoiceCommand = SynthesizerCommands.ForEachVoiceAction(delegate (Voice voice)
-            {
-                InitVoiceGroup(voice, ref currentY, offsetYFirst: false);
-            });
-
-            game.Synthesizer.SendCommand(ref forEachVoiceCommand);
-
-            game.AddUIWidgets(widgets);
-
-            game.Synthesizer.OnVoiceAdded += delegate (PolyphonicSynthesizer polyphonic, Voice voice)
-            {
-                float currentY = voicesGroup[voicesGroup.Count - 1].Position.Y;
-
-                InitVoiceGroup(voice, ref currentY, offsetYFirst: true);
-            };
-        }
-
-        private void InitVoiceGroup(Voice voice, ref float currentY, bool offsetYFirst)
-        {
-            float scrollPaneGroupSpacing = voicesGroup.Size.Min() * 0.02f;
-
-            float groupX = voicesGroup.Position.X + scrollPaneGroupSpacing;
-            float groupY = currentY + scrollPaneGroupSpacing;
-            float groupW = voicesGroup.Size.X * 0.925f;
-            float groupH = voicesGroup.Size.Y * 0.35f;
-
-            if (offsetYFirst)
-            {
-                currentY += groupH + voicesGroup.Size.Y * 0.1f;
-            }
-
-            string xml = "<Layout>" + Environment.NewLine;
-
-            xml +=
-            $@"
-                    <VoiceGroup X=""{groupX}"" Y=""{groupY}"" W=""{groupW}"" H=""{groupH}""/>
-            ";
-
-            currentY += groupH + voicesGroup.Size.Y * 0.05f;
-
-            xml += Environment.NewLine + "</Layout>";
-
-            ViewableList<Widget> voiceGroups = uiXmlParser.Parse(xml);
-
-            voiceGroups.ForEach(voiceGroup =>
-            {
-                ((VoiceGroup)voiceGroup).Voice = voice;
-            });
-
-            voicesGroup.AddChildRange(voiceGroups);
         }
 
         public void AddVoiceToExistingKeyBinding(Keys key, Voice voice)
@@ -504,7 +433,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             console.WindowResized(width, height);
         }
 
-        private static Dictionary<Keys, Voice[]> GetDefaultKeyVoiceBindings()
+        private static Dictionary<Keys, ImmutableArray<Voice>> GetDefaultKeyVoiceBindings()
         {
             MidiNote startNote = MidiNote.C4;
 
@@ -513,7 +442,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             int startOctave = MidiUtils.GetOctave(startNote);
             int additionalLayerCount = 3;
 
-            ViewableList<ValueTuple<Keys, Voice[]>> voices = new ViewableList<ValueTuple<Keys, Voice[]>>();
+            ViewableList<ValueTuple<Keys, ImmutableArray<Voice>>> voices = new ViewableList<ValueTuple<Keys, ImmutableArray<Voice>>>();
 
             foreach (int offset in semitoneOffsets)
             {
@@ -541,7 +470,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
                     voiceList.Add(Voice.FromMidi(midiNote));
                 }
 
-                ValueTuple<Keys, Voice[]> binding = (key, voiceList.ToArray());
+                ValueTuple<Keys, ImmutableArray<Voice>> binding = (key, new ImmutableArray<Voice>(voiceList.ToArray()));
 
                 voices.Add(binding);
             }

@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using GeoLib;
 using GeoLib.GeoGraphics;
 using GeoLib.GeoGraphics.UI;
+using GeoLib.GeoGraphics.UI.Data;
+using GeoLib.GeoGraphics.UI.Data.Generic;
 using GeoLib.GeoGraphics.UI.Widgets;
 using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
@@ -19,19 +21,35 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
     // TODO: Add options/support for not having label and slightly different layouts.
     public class SliderDisplayWidget : GroupWidget
     {
+        /// <summary>
+        /// 
+        /// This is used to round end results.
+        /// 
+        /// <br></br>
+        /// <br></br>
+        /// 
+        /// Set <c>-1</c> to disable.
+        /// 
+        /// </summary>
+        public static int RoundingPlaces = 8;
+
         private Slider slider;
         private TextField sliderDisplayTextField;
         private TextButton resetButton;
 
-        private bool settingValueFromSlider = false;
-        private bool settingValueFromDisplayTextField = false;
+        private readonly NumberRange<double> range;
+        private readonly double defaultValue;
+        private readonly bool treatAsScalarPercentage;
+
+        private readonly string propertyName;
+
         private bool settingValue = false;
+        private bool settingValueFromSlider = false;
+        private bool settingValueFromTextField = false;
 
-        public NumberRange<double> Range { get; set; }
-        public double DefaultValue { get; set; }
-        public bool TreatAsScalarPercentage { get; set; }
-
-        public string PropertyName { get; }
+        private IPropertyBindable propertyBindable;
+        private ConvertingPropertyBinding<double, float> sliderBinding;
+        private ConvertingPropertyBinding<double, string> textFieldBinding;
 
         public float DragIncrement
         {
@@ -60,13 +78,13 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             Adapters.Add(new PreciseGroupLayoutAdapter());
 
-            Range = range;
+            this.range = range;
 
-            DefaultValue = defaultValue;
+            this.defaultValue = defaultValue;
 
-            TreatAsScalarPercentage = treatAsScalarPercentage;
+            this.treatAsScalarPercentage = treatAsScalarPercentage;
 
-            PropertyName = propertyName;
+            this.propertyName = propertyName;
 
             string uiXml = GetUIXml(labelPosition: labelPosition,
                                     sliderPosition: sliderPosition,
@@ -81,6 +99,60 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             InitWidgets();
         }
 
+        public void BindProperty(PropertyBindable<double> bindable)
+        {
+            this.propertyBindable = bindable;
+
+            sliderBinding?.Dispose();
+            textFieldBinding?.Dispose();
+
+            sliderBinding = new ConvertingPropertyBinding<double, float>(bindable, SliderBinding_GetTarget, SliderBinding_SetTarget, SliderBinding_SourceToTarget, SliderBinding_TargetToSource);
+            textFieldBinding = new ConvertingPropertyBinding<double, string>(bindable, TextFieldBinding_GetTarget, TextFieldBinding_SetTarget, TextFieldBinding_SourceToTarget, TextFieldBinding_TargetToSource);
+
+            slider.BindProperty(sliderBinding);
+            sliderDisplayTextField.BindProperty(textFieldBinding);
+        }
+
+        private float SliderBinding_GetTarget()
+        {
+            return slider.CurrentValue;
+        }
+
+        private void SliderBinding_SetTarget(float value)
+        {
+            slider.SetValueWithoutProperty((float)value);
+        }
+
+        private float SliderBinding_SourceToTarget(double value)
+        {
+            return (float)GetProcessedValueForWidgets(value);
+        }
+
+        private double SliderBinding_TargetToSource(float value)
+        {
+            return GetProcessedValueForExternal(value);
+        }
+
+        private string TextFieldBinding_GetTarget()
+        {
+            return sliderDisplayTextField.Text;
+        }
+
+        private void TextFieldBinding_SetTarget(string value)
+        {
+            sliderDisplayTextField.Text = value;
+        }
+
+        private string TextFieldBinding_SourceToTarget(double value)
+        {
+            return GetProcessedValueForWidgets(value).ToString();
+        }
+
+        private double TextFieldBinding_TargetToSource(string value)
+        {
+            return GetProcessedValueForExternal(GeoMath.ParseOrDefault<double>(value));
+        }
+
         private void InitWidgets()
         {
             slider = FindAsByNameDeepSearch<Slider>(SLIDER_NAME);
@@ -90,22 +162,22 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             slider.OnValueChange += Slider_OnValueChanged;
             sliderDisplayTextField.OnTextInput += SliderDisplayTextField_OnTextInput;
 
-            SetWidgetValues(DefaultValue);
+            SetWidgetValues(defaultValue, updateProperty: true);
 
             resetButton.OnClick += ResetButton_OnClick;
         }
 
-        public void SetWidgetValues(double value)
+        public void SetWidgetValues(double value, bool updateProperty)
         {
             value = GetProcessedValueForWidgets(value);
 
-            SetWidgetValuesInternal(value);
+            SetWidgetValuesInternal(value, updateProperty);
         }
 
-        private void SetWidgetValuesInternal(double value)
+        private void SetWidgetValuesInternal(double value, bool updateProperty)
         {
-            SetSlider(value);
-            SetDisplayTextField(value);
+            SetSlider(value, updateProperty: true);
+            SetDisplayTextField(value, updateProperty: true);
         }
 
         private void Slider_OnValueChanged(Slider slide, float previousValue, float newValue)
@@ -122,9 +194,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void SliderDisplayTextField_OnTextInput(string text)
         {
-            if (settingValueFromDisplayTextField)
+            if (settingValueFromTextField)
             {
-                settingValueFromDisplayTextField = false;
+                settingValueFromTextField = false;
 
                 return;
             }
@@ -136,9 +208,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void ResetButton_OnClick()
         {
-            SetWidgetValues(DefaultValue);
+            SetWidgetValues(defaultValue, updateProperty: true);
 
-            OnWidgetValueChanged?.Invoke(DefaultValue);
+            OnWidgetValueChanged?.Invoke(defaultValue);
         }
 
         private void WidgetValueChanged(double newValue, bool setSlider, bool setDisplay)
@@ -154,12 +226,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             if (setSlider)
             {
-                SetSlider(newValue);
+                SetSlider(newValue, updateProperty: true);
             }
 
             if (setDisplay)
             {
-                SetDisplayTextField(newValue);
+                SetDisplayTextField(newValue, updateProperty: true);
             }
 
             OnWidgetValueChanged?.Invoke(externalValue);
@@ -167,36 +239,62 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             settingValue = false;
         }
 
-        private void SetSlider(double value)
+        private void SetSlider(double value, bool updateProperty)
         {
             settingValueFromSlider = true;
 
-            slider.CurrentValue = (float)value;
+            if (!updateProperty)
+            {
+                slider.SetValueWithoutProperty((float)value);
+            }
+            else
+            {
+                slider.CurrentValue = (float)value;
+            }
         }
 
-        private void SetDisplayTextField(double value)
+        private void SetDisplayTextField(double value, bool updateProperty)
         {
-            sliderDisplayTextField.Text = ((float)value).ToString();
+            string text = ((float)value).ToString();
+
+            if (!updateProperty)
+            {
+                sliderDisplayTextField.SetTextWithoutProperty(text);
+            }
+            else
+            {
+                sliderDisplayTextField.Text = text;
+            }
         }
 
         private double GetProcessedValueForWidgets(double value)
         {
-            if (TreatAsScalarPercentage)
+            if (treatAsScalarPercentage)
             {
-                return GeoMath.ScalarToPercent(value);
+                value = GeoMath.ScalarToPercent(value);
             }
 
-            return value;
+            return CheckIfNeedsRounding(value);
         }
 
         private double GetProcessedValueForExternal(double value)
         {
-            if (TreatAsScalarPercentage)
+            if (treatAsScalarPercentage)
             {
-                return GeoMath.PercentToScalar(value);
+                value = GeoMath.PercentToScalar(value);
             }
 
-            return value;
+            return CheckIfNeedsRounding(value);
+        }
+
+        private double CheckIfNeedsRounding(double value)
+        {
+            if (RoundingPlaces < 0)
+            {
+                return value;
+            }
+
+            return GeoMath.RoundAwayFromZero(value, RoundingPlaces);
         }
 
         private string GetUIXml(Vec2f? labelPosition = null,
@@ -207,9 +305,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                                 Vec2f? resetButtonPosition = null,
                                 Vec2f? resetButtonSize = null)
         {
-            bool hasPropertyName = !TextUtils.IsNullEmptyOrWhitespace(PropertyName);
+            bool hasPropertyName = !TextUtils.IsNullEmptyOrWhitespace(propertyName);
 
-            NumberRange<double> processedRange = TreatAsScalarPercentage ? NumberRangeUtils.ScalarToPercent(Range) : Range;
+            NumberRange<double> processedRange = treatAsScalarPercentage ? NumberRangeUtils.ScalarToPercent(range) : range;
 
             if (!labelPosition.HasValue)
             {
@@ -246,52 +344,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                 resetButtonSize = new Vec2f(17.5f, 75f);
             }
 
-            /*if (!labelPosition.HasValue)
-            {
-                labelPosition = new Vec2f(0f, 0.25f);
-            }
+            double processedDefaultValue = GetProcessedValueForWidgets(defaultValue);
 
-            if (!sliderPosition.HasValue)
-            {
-                sliderPosition = !hasPropertyName ? new Vec2f(0.2625f, 0f) : new Vec2f(0.325f, 0f);
-            }
-
-            if (!sliderSize.HasValue)
-            {
-                sliderSize = !hasPropertyName ? new Vec2f(0.4875f, 1f) : new Vec2f(0.425f, 1f);
-            }
-
-            if (!textFieldPosition.HasValue)
-            {
-                textFieldPosition = new Vec2f(0.775f, 0f);
-            }
-
-            if (!textFieldSize.HasValue)
-            {
-                textFieldSize = new Vec2f(0.175f, 1f);
-            }
-
-            if (!resetButtonPosition.HasValue)
-            {
-                resetButtonPosition = !hasPropertyName ? new Vec2f(0f, 0.125f) : new Vec2f(0.125f, 0.125f);
-            }
-
-            if (!resetButtonSize.HasValue)
-            {
-                resetButtonSize = new Vec2f(0.175f, 0.75f);
-            }
-
-            labelPosition *= 100f;
-            sliderPosition *= 100f;
-            sliderSize *= 100f;
-            textFieldPosition *= 100f;
-            textFieldSize *= 100f;
-            resetButtonPosition *= 100f;
-            resetButtonSize *= 100f;*/
-
-            double processedDefaultValue = GetProcessedValueForWidgets(DefaultValue);
-
-            if (PropertyName is null)
+            if (propertyName is null)
             {
                 return
             $@"<Layout>
@@ -330,7 +385,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                 <PlainLabel
                  Position=""({labelPosition.Value.X}%, {labelPosition.Value.Y}%)""
                  Size=""(20%, 100%)""
-                 Text=""{PropertyName}""
+                 Text=""{propertyName}""
                  FitText=""false""
                  GrowWithText=""true""/>
 
@@ -360,6 +415,13 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Name=""{SLIDER_DISPLAY_TEXTFIELD_NAME}""/>
 
             </Layout>";
+        }
+
+        protected override void DisposeInternal(bool fromFinalizer)
+        {
+            base.DisposeInternal(fromFinalizer);
+
+            propertyBindable = null;
         }
 
         private const string SLIDER_NAME = "Slider";

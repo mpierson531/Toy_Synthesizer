@@ -20,6 +20,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         SetVoice_CenterFrequency,
 
+        SetVoice_Name,
+
         SetVoice_Mix,
 
         SetVoice_Attack,

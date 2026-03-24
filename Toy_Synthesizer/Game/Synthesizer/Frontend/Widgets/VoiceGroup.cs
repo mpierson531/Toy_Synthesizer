@@ -9,6 +9,8 @@ using GeoLib;
 using GeoLib.GeoGraphics;
 using GeoLib.GeoGraphics.Slicing;
 using GeoLib.GeoGraphics.UI;
+using GeoLib.GeoGraphics.UI.Data;
+using GeoLib.GeoGraphics.UI.Data.Generic;
 using GeoLib.GeoGraphics.UI.Widgets;
 using GeoLib.GeoMaths;
 using GeoLib.GeoShapes;
@@ -24,7 +26,6 @@ using Toy_Synthesizer.Game.UI;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
-    // TODO: Implement usage of ranges in PolyphonicSynthesizer and implement command usage.
     // TODO: Implement oscillator control group.
     public class VoiceGroup : ScrollPane
     {
@@ -44,52 +45,47 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
                 if (voice is not null)
                 {
-                    SetName();
-
-                    string frequencyString = voice.CenterFrequency.ToString();
-
-                    SetFrequency(frequencyString);
-
-                    FrequencyTextField.Text = frequencyString;
-
-                    string attackString = voice.Adsr?.AttackSeconds.ToString();
-                    string decayString = voice.Adsr?.DecaySeconds.ToString();
-                    string sustainString = voice.Adsr?.SustainLevel.ToString();
-                    string releaseString = voice.Adsr?.ReleaseSeconds.ToString();
-
-                    SetAdsr(attackString, 
-                            decayString, 
-                            sustainString,
-                            releaseString);
-
-                    AttackTextField.Text = attackString;
-                    DecayTextField.Text = decayString;
-                    SustainTextField.Text = sustainString;
-                    ReleaseTextField.Text = releaseString;
+                    UpdatePropertiesFromVoice();
                 }
 
                 OnVoiceChanged?.Invoke(this, previous, voice);
             }
         }
 
-        public PlainLabel NameLabel;
+        private PropertyBindable<string> namePropertyBindable;
+        private SameTypePropertyBinding<string> nameBinding;
 
-        public PlainLabel FrequencyDisplayLabel;
-        public TextField FrequencyTextField;
+        private PropertyBindable<double> frequencyPropertyBindable;
+        private ConvertingPropertyBinding<double, string> frequencyBinding;
 
-        public PlainLabel AttackDisplayLabel;
-        public PlainLabel DecayDisplayLabel;
-        public PlainLabel SustainDisplayLabel;
-        public PlainLabel ReleaseDisplayLabel;
-        public TextField AttackTextField;
-        public TextField DecayTextField;
-        public TextField SustainTextField;
-        public TextField ReleaseTextField;
+        private PropertyBindable<double> attackPropertyBindable;
+        private ConvertingPropertyBinding<double, string> attackBinding;
+
+        private PropertyBindable<double> decayPropertyBindable;
+        private ConvertingPropertyBinding<double, string> decayBinding;
+
+        private PropertyBindable<double> sustainPropertyBindable;
+        private ConvertingPropertyBinding<double, string> sustainBinding;
+
+        private PropertyBindable<double> releasePropertyBindable;
+        private ConvertingPropertyBinding<double, string> releaseBinding;
+
+        private PlainLabel NameDisplayLabel;
+        private TextField NameTextField;
+
+        private PlainLabel FrequencyDisplayLabel;
+        private TextField FrequencyTextField;
+
+        private PlainLabel AttackDisplayLabel;
+        private PlainLabel DecayDisplayLabel;
+        private PlainLabel SustainDisplayLabel;
+        private PlainLabel ReleaseDisplayLabel;
+        private TextField AttackTextField;
+        private TextField DecayTextField;
+        private TextField SustainTextField;
+        private TextField ReleaseTextField;
 
         public event Action<VoiceGroup, Voice, Voice> OnVoiceChanged;
-
-        /*private float minWidgetEdgeSpacingScalar;
-        private float nameLabelFrequencyTextFieldVerticalSpacingScalar;*/
 
         public VoiceGroup(Vec2f position, Vec2f size, Voice voice, Game game)
             : base(position, size,
@@ -99,6 +95,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                    sizeChildren: false)
         {
             this.game = game;
+
+            InitPropertyBindables();
 
             game.UIManager.InitScrollPane(this);
 
@@ -113,6 +111,23 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             FindAs<Drawer>(widget => widget is not null).CollapseInternal(false);
         }
 
+        private void InitPropertyBindables()
+        {
+            namePropertyBindable = new PropertyBindable<string>("Name");
+            frequencyPropertyBindable = new PropertyBindable<double>("Frequency");
+            attackPropertyBindable = new PropertyBindable<double>("Attack");
+            decayPropertyBindable = new PropertyBindable<double>("Decay");
+            sustainPropertyBindable = new PropertyBindable<double>("Sustain");
+            releasePropertyBindable = new PropertyBindable<double>("Release");
+
+            namePropertyBindable.OnValueChangedTyped += SetVoiceName;
+            frequencyPropertyBindable.OnValueChangedTyped += SetFrequency;
+            attackPropertyBindable.OnValueChangedTyped += SetAttack;
+            decayPropertyBindable.OnValueChangedTyped += SetDecay;
+            sustainPropertyBindable.OnValueChangedTyped += SetSustain;
+            releasePropertyBindable.OnValueChangedTyped += SetRelease;
+        }
+
         private void CreateWidgets(UIManager uiManager)
         {
             UIXmlParser xmlParser = new UIXmlParser(uiManager);
@@ -123,7 +138,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             xmlParser.Parse(uiXml, rootParent: this);
 
-            NameLabel = FindAsByNameDeepSearch<PlainLabel>(NameLabelName);
+            NameDisplayLabel = FindAsByNameDeepSearch<PlainLabel>(NameLabelName);
+            NameTextField = FindAsByNameDeepSearch<TextField>(NameTextFieldName);
+
+            nameBinding = NameTextField.BindProperty(namePropertyBindable);
 
             FrequencyDisplayLabel = FindAsByNameDeepSearch<PlainLabel>(FrequencyDisplayLabelName);
             FrequencyTextField = FindAsByNameDeepSearch<TextField>(FrequencyTextFieldName);
@@ -138,20 +156,26 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             SustainTextField = FindAsByNameDeepSearch<TextField>(SustainTextFieldName);
             ReleaseTextField = FindAsByNameDeepSearch<TextField>(ReleaseTextFieldName);
 
-            AttackTextField.OnTextInput += SetAttack;
-            DecayTextField.OnTextInput += SetDecay;
-            SustainTextField.OnTextInput += SetSustain;
-            ReleaseTextField.OnTextInput += SetRelease;
+            nameBinding = NameTextField.BindProperty(namePropertyBindable);
+
+            frequencyBinding = FrequencyTextField.BindProperty_Number(frequencyPropertyBindable);
+
+            attackBinding = AttackTextField.BindProperty_Number(attackPropertyBindable);
+            decayBinding = DecayTextField.BindProperty_Number(decayPropertyBindable);
+            sustainBinding = SustainTextField.BindProperty_Number(sustainPropertyBindable);
+            releaseBinding = ReleaseTextField.BindProperty_Number(releasePropertyBindable);
 
             InitTooltips(uiManager);
         }
 
         private void InitTooltips(UIManager uiManager)
         {
+            string nameDescription = "The name of this voice";
+
             string centerFrequencyDescription = $"The center frequency of this voice, around which the oscillators oscillate."
                                                 + $"\nMin: {PolyphonicSynthesizer.MIN_CENTER_FREQUENCY}\nMax: {PolyphonicSynthesizer.MAX_CENTER_FREQUENCY}";
 
-            string attackDescription = $"How long it takes to increase to peak volume, in seconds." 
+            string attackDescription = $"How long it takes to reach peak volume, in seconds." 
                                        + $"\nMin: {PolyphonicSynthesizer.MIN_ATTACK}\nMax: {PolyphonicSynthesizer.MAX_ATTACK}";
 
             string decayDescription = $"How long it takes to decrease to the sustain level volume, in seconds." 
@@ -162,6 +186,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             string releaseDescription = $"How long it takes the volume to fade to zero, in seconds." +
                                         $"\nMin: {PolyphonicSynthesizer.MIN_RELEASE}\nMax: {PolyphonicSynthesizer.MAX_RELEASE}";
+
+            uiManager.AddTextTooltip(NameDisplayLabel, nameDescription);
+            uiManager.AddTextTooltip(NameTextField, nameDescription);
 
             uiManager.AddTextTooltip(FrequencyDisplayLabel, centerFrequencyDescription);
             uiManager.AddTextTooltip(FrequencyTextField, centerFrequencyDescription);
@@ -184,7 +211,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             
         }
 
-        private void SetName()
+        private void SetVoiceName(string name)
         {
             if (Voice is null)
             {
@@ -193,69 +220,61 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             Name = $"{Voice.Name}_{Voice.CenterFrequency}Hz_VoiceGroup";
 
-            NameLabel.Text = GetNameLabelText();
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceName(Voice, name));
         }
 
-        private void SetFrequency(string text)
+        private void UpdatePropertiesFromVoice()
         {
-            double value;
+            namePropertyBindable.SetValueRaw(Voice.Name);
 
-            if (TextUtils.IsNullEmptyOrWhitespace(text))
-            {
-                value = 0.0;
-            }
-            else
-            {
-                value = GeoMath.ParseOrDefault<double>(text);
-            }
+            frequencyPropertyBindable.SetValueRaw(Voice.CenterFrequency);
 
-            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceCenterFrequency(Voice, value));
+            attackPropertyBindable.SetValueRaw(Voice.Adsr.AttackSeconds);
+            decayPropertyBindable.SetValueRaw(Voice.Adsr.DecaySeconds);
+            sustainPropertyBindable.SetValueRaw(Voice.Adsr.SustainLevel);
+            releasePropertyBindable.SetValueRaw(Voice.Adsr.ReleaseSeconds);
+
+            NameTextField.SetTextWithoutProperty(Voice.Name);
+
+            FrequencyTextField.SetTextWithoutProperty(Voice.CenterFrequency.ToString());
+
+            AttackTextField.SetTextWithoutProperty(Voice.Adsr.AttackSeconds.ToString());
+            DecayTextField.SetTextWithoutProperty(Voice.Adsr.DecaySeconds.ToString());
+            SustainTextField.SetTextWithoutProperty(Voice.Adsr.SustainLevel.ToString());
+            ReleaseTextField.SetTextWithoutProperty(Voice.Adsr.ReleaseSeconds.ToString());
         }
 
-        private void SetAdsr(string attackText, string decayText, string sustainText, string releaseText)
+        private void SetFrequency(double frequency)
         {
-            SetAttack(attackText);
-            SetDecay(decayText);
-            SetSustain(sustainText);
-            SetRelease(releaseText);
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceCenterFrequency(Voice, frequency));
         }
 
-        private void SetAttack(string text)
+        private void SetAdsr(double attack, double decay, double sustain, double release)
         {
-            double value = GeoMath.ParseOrDefault<double>(text);
-
-            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceAttack(voice, value));
+            SetAttack(attack);
+            SetDecay(decay);
+            SetSustain(sustain);
+            SetRelease(release);
         }
 
-        private void SetDecay(string text)
+        private void SetAttack(double attack)
         {
-            double value = GeoMath.ParseOrDefault<double>(text);
-
-            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceDecay(voice, value));
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceAttack(voice, attack));
         }
 
-        private void SetSustain(string text)
+        private void SetDecay(double decay)
         {
-            double value = GeoMath.ParseOrDefault<double>(text);
-
-            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceSustain(voice, value));
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceDecay(voice, decay));
         }
 
-        private void SetRelease(string text)
+        private void SetSustain(double sustain)
         {
-            double value = GeoMath.ParseOrDefault<double>(text);
-
-            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceRelease(voice, value));
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceSustain(voice, sustain));
         }
 
-        private string GetNameLabelText()
+        private void SetRelease(double release)
         {
-            if (Voice is null)
-            {
-                return "Name: ";
-            }
-
-            return "Name: " + Voice.Name;
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceRelease(voice, release));
         }
 
         private string GetUIXml()
@@ -264,20 +283,25 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
     <PlainLabel Position=""(5%, 5%)""
                 Size=""(25%, 12.5%)"" 
-                Text=""{GetNameLabelText()}"" 
+                Text=""Name:"" 
                 FitText=""false"" 
                 GrowWithText=""true"" 
                 Name=""{NameLabelName}""/>
 
-    <PlainLabel Position=""(30%, 5%)"" 
-                Size=""(25%, 12.5%)"" 
+    <TextField Position=""(21%, 5%)"" 
+               Size=""(22.5%, 12.5%)"" 
+               MaxCharacters=""20"" 
+               Name=""{NameTextFieldName}""/>
+
+    <PlainLabel Position=""(46%, 5%)"" 
+                Size=""(20%, 12.5%)"" 
                 Text=""Frequency:"" 
                 FitText=""false"" 
                 GrowWithText=""true"" 
                 Name=""{FrequencyDisplayLabelName}""/>
 
-    <TextField Position=""(57.5%, 5%)"" 
-               Size=""(25%, 12.5%)"" 
+    <TextField Position=""(72.5%, 5%)"" 
+               Size=""(22.5%, 12.5%)"" 
                MaxCharacters=""20"" 
                NumberMinValue=""{PolyphonicSynthesizer.CenterFrequencyRange.Min}""
                NumberMaxValue=""{PolyphonicSynthesizer.CenterFrequencyRange.Max}""
@@ -363,7 +387,34 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 </Layout>";
         }
 
+        protected override void DisposeInternal(bool fromFinalizer)
+        {
+            base.DisposeInternal(fromFinalizer);
+
+            namePropertyBindable = null;
+            frequencyPropertyBindable = null;
+            attackPropertyBindable = null;
+            decayPropertyBindable = null;
+            sustainPropertyBindable = null;
+            releasePropertyBindable = null;
+
+            nameBinding.Dispose();
+            frequencyBinding.Dispose();
+            attackBinding.Dispose(); 
+            decayBinding.Dispose();
+            sustainBinding.Dispose();
+            releaseBinding.Dispose();
+
+            nameBinding = null;
+            frequencyBinding = null;
+            attackBinding = null;
+            decayBinding = null;
+            sustainBinding = null;
+            releaseBinding = null;
+        }
+
         private const string NameLabelName = "NameLabel";
+        private const string NameTextFieldName = "NameTextField";
 
         private const string FrequencyDisplayLabelName = "FrequencyDisplayLabel";
         private const string FrequencyTextFieldName = "FrequencyTextField";

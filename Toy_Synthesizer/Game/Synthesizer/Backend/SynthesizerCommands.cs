@@ -41,6 +41,13 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_CenterFrequency, valueStorage: RawValueStorage_64B.From(frequency), objectValue: voice);
         }
 
+        // Name 
+
+        public static AudioSourceCommand SetVoiceName(Voice voice, string name)
+        {
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Name, objectValue: voice, objectValue2: name);
+        }
+
         // Mix
 
         public static AudioSourceCommand SetVoiceMix(Voice voice, double mix)
