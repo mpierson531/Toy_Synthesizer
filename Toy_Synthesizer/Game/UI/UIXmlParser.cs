@@ -34,13 +34,15 @@ namespace Toy_Synthesizer.Game.UI
 
         private readonly ViewableList<TypeFactory> additionalTypeFactories;
 
+        private readonly Dictionary<string, Dictionary<string, object>> enumTypeCache;
+
         public UIXmlParser(UIManager uiManager)
         {
             this.uiManager = uiManager;
 
             knownWidgetTypeNames = new ViewableList<string> 
             { 
-                "TextButton", 
+                "TextButton",
                 "Label", 
                 "PlainLabel", 
                 "TextField", 
@@ -50,10 +52,13 @@ namespace Toy_Synthesizer.Game.UI
                 "ScrollPane", 
                 "GroupWidget",
                 "Slider",
-                "Drawer"
+                "Drawer",
+                "DropDownListView" // DropDownListView should only be used with enums.
             };
 
             additionalTypeFactories = new ViewableList<TypeFactory>(1000);
+
+            enumTypeCache = new Dictionary<string, Dictionary<string, object>>(1000);
         }
 
         public void AddTypeFactory(TypeFactory typeFactory)
@@ -68,8 +73,62 @@ namespace Toy_Synthesizer.Game.UI
             knownWidgetTypeNames.Add(typeFactory.TypeName);
         }
 
+        // Parsing enum lists will not work if this method is not used for the type first.
+        public void CacheEnumType<T>() where T : unmanaged, Enum
+        {
+            string typeName = typeof(T).Name;
+
+            if (enumTypeCache.ContainsKey(typeName))
+            {
+                throw new InvalidOperationException($"Enum type \"{typeName}\" already cached.");
+            }
+
+            T[] values = Enum.GetValues<T>();
+
+            Dictionary<string, object> valuesDictionary = new Dictionary<string, object>();
+
+            for (int index = 0; index < values.Length; index++)
+            {
+                T value = values[index];
+
+                valuesDictionary.Add(value.ToString(), value);
+            }
+
+            enumTypeCache.Add(typeName, valuesDictionary);
+        }
+
+        // At the moment, this only supports using all values in an enum type, rather than explicitly specified values.
+        public bool TryParseEnumList(ViewableList<XAttribute> attributes, out ViewableList<object> values)
+        {
+            if (!TryGetString(attributes, "typename", out string typeName))
+            {
+                values = null;
+
+                return false;
+            }
+
+            if (!enumTypeCache.TryGetValue(typeName, out Dictionary<string, object> enumValues))
+            {
+                values = null;
+
+                return false;
+            }
+
+            // TODO: Maybe come back, and set values to null but return true, if typeName is valid but enumValues is empty.
+
+            values = new ViewableList<object>(enumValues.Count);
+
+            foreach (object value in enumValues.Values)
+            {
+                values.Add(value);
+            }
+
+            return true;
+        }
+
         public ViewableList<Widget> Parse(string xmlContent, 
-                                          GroupWidget rootParent = null)
+                                          GroupWidget rootParent = null,
+                                          AABB? rootParentBaseBounds = null)
         {
             XDocument doc = XDocument.Parse(xmlContent);
 
@@ -80,11 +139,16 @@ namespace Toy_Synthesizer.Game.UI
                 return rootWidgets;
             }
 
+            if (!rootParentBaseBounds.HasValue && rootParent is not null)
+            {
+                rootParentBaseBounds = rootParent.GetBoundsAABB();
+            }
+
             // Handle case where root is just a container tag <Layout> vs. a specific widget.
 
             if (IsWidgetName(doc.Root.Name.LocalName))
             {
-                Widget w = ParseElement(doc.Root, parent: rootParent);
+                Widget w = ParseElement(doc.Root, baseBounds: rootParentBaseBounds);
 
                 if (w is not null)
                 {
@@ -95,7 +159,7 @@ namespace Toy_Synthesizer.Game.UI
             {
                 foreach (XElement element in doc.Root.Elements())
                 {
-                    Widget w = ParseElement(element, parent: rootParent);
+                    Widget w = ParseElement(element, baseBounds: rootParentBaseBounds);
 
                     if (w is not null)
                     {
@@ -112,9 +176,9 @@ namespace Toy_Synthesizer.Game.UI
             return rootWidgets;
         }
 
-        private Widget ParseElement(XElement element, Widget parent)
+        private Widget ParseElement(XElement element, AABB? baseBounds = null)
         {
-            Widget widget = CreateWidget(element, element.Name.LocalName, parent);
+            Widget widget = CreateWidget(element, element.Name.LocalName, baseBounds);
 
             if (widget is null)
             {
@@ -127,7 +191,7 @@ namespace Toy_Synthesizer.Game.UI
                 {
                     foreach (var childElement in element.Elements())
                     {
-                        Widget childWidget = ParseElement(childElement, widget);
+                        Widget childWidget = ParseElement(childElement, widget.GetBoundsAABB());
 
                         if (childWidget is not null)
                         {
@@ -140,11 +204,11 @@ namespace Toy_Synthesizer.Game.UI
             return widget;
         }
 
-        private Widget CreateWidget(XElement element, string typeName, Widget parent)
+        private Widget CreateWidget(XElement element, string typeName, AABB? baseBounds)
         {
             ViewableList<XAttribute> attributes = new ViewableList<XAttribute>(element.Attributes());
 
-            (Vec2f position, Vec2f size) = GetBounds(attributes, parent);
+            (Vec2f position, Vec2f size) = GetBounds(attributes, baseBounds);
 
             TypeFactory additionalTypeFactory = additionalTypeFactories.Find(factory => factory.TypeName.Equals(typeName));
 
@@ -169,6 +233,7 @@ namespace Toy_Synthesizer.Game.UI
                     "ScrollPane" => CreateScrollPane(position, size, attributes),
                     "Slider" => CreateNumberSlider(position, size, attributes),
                     "Drawer" => CreateDrawer(position, size, attributes),
+                    "DropDownListView" => CreateDropDownList(position, size, attributes),
 
                     _ => throw new InvalidOperationException($"Unsupported UI widget type: \"{typeName}\".")
                 };
@@ -319,6 +384,16 @@ namespace Toy_Synthesizer.Game.UI
             return uiManager.Drawer(position, size, orientation, coverButtonText);
         }
 
+        private DropDownListView CreateDropDownList(Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+        {
+            TryParseEnumList(attributes, out ViewableList<object> values);
+
+            TryGetInt(attributes, "defaultindex", out int defaultIndex);
+            TryGetString(attributes, "coverbuttontext", out string coverButtonText);
+
+            return uiManager.DropDownList(position, size, values, defaultIndex, coverButtonText);
+        }
+
         private bool IsWidgetName(string name)
         {
             return knownWidgetTypeNames.Contains(name);
@@ -386,7 +461,7 @@ namespace Toy_Synthesizer.Game.UI
             return succeded;
         }
 
-        private static AABB GetBounds(ViewableList<XAttribute> attributes, Widget parent)
+        private static AABB GetBounds(ViewableList<XAttribute> attributes, AABB? baseBounds)
         {
             TryGetPosition(attributes, out Vec2f? positionNullable, out PositionMode positionMode, out bool xIsPercent, out bool yIsPercent);
             TryGetSize(attributes, out Vec2f? sizeNullable, out SizeMode sizeMode, out bool widthIsPercent, out bool heightIsPercent);
@@ -396,18 +471,18 @@ namespace Toy_Synthesizer.Game.UI
 
             if (xIsPercent || yIsPercent || widthIsPercent || heightIsPercent)
             {
-                AABB baseBounds = parent is null ? (AABB)Geo.Instance.Display.WindowBounds : parent.GetBoundsAABB();
+                AABB realBaseBounds = !baseBounds.HasValue ? (AABB)Geo.Instance.Display.WindowBounds : baseBounds.Value;
 
-                if (xIsPercent && heightIsPercent && positionMode != PositionMode.None)
+                if (xIsPercent && yIsPercent && positionMode != PositionMode.None)
                 {
                     switch (positionMode)
                     {
                         case PositionMode.Min:
-                            position = baseBounds.Position + (baseBounds.Size.Min() * GeoMath.PercentToScalar(position));
+                            position = realBaseBounds.Position + (realBaseBounds.Size.Min() * GeoMath.PercentToScalar(position));
                             break;
 
                         case PositionMode.Max:
-                            position = baseBounds.Position + (baseBounds.Size.Max() * GeoMath.PercentToScalar(position));
+                            position = realBaseBounds.Position + (realBaseBounds.Size.Max() * GeoMath.PercentToScalar(position));
                             break;
 
                         default: throw new InvalidOperationException($"Invalid PositionMode: \"{positionMode}\".");
@@ -417,12 +492,12 @@ namespace Toy_Synthesizer.Game.UI
                 {
                     if (xIsPercent)
                     {
-                        position.X = baseBounds.Position.X + (baseBounds.Size.X * GeoMath.PercentToScalar(position.X));
+                        position.X = realBaseBounds.Position.X + (realBaseBounds.Size.X * GeoMath.PercentToScalar(position.X));
                     }
 
                     if (yIsPercent)
                     {
-                        position.Y = baseBounds.Position.Y + (baseBounds.Size.Y * GeoMath.PercentToScalar(position.Y));
+                        position.Y = realBaseBounds.Position.Y + (realBaseBounds.Size.Y * GeoMath.PercentToScalar(position.Y));
                     }
                 }
 
@@ -431,11 +506,11 @@ namespace Toy_Synthesizer.Game.UI
                     switch (sizeMode)
                     {
                         case SizeMode.Min:
-                            size = baseBounds.Size.Min() * GeoMath.PercentToScalar(size);
+                            size = realBaseBounds.Size.Min() * GeoMath.PercentToScalar(size);
                             break;
 
                         case SizeMode.Max:
-                            size = baseBounds.Size.Max() * GeoMath.PercentToScalar(size);
+                            size = realBaseBounds.Size.Max() * GeoMath.PercentToScalar(size);
                             break;
 
                         default: throw new InvalidOperationException($"Invalid SizeMode: \"{sizeMode}\".");
@@ -445,12 +520,12 @@ namespace Toy_Synthesizer.Game.UI
                 {
                     if (widthIsPercent)
                     {
-                        size.X = baseBounds.Size.X * GeoMath.PercentToScalar(size.X);
+                        size.X = realBaseBounds.Size.X * GeoMath.PercentToScalar(size.X);
                     }
 
                     if (heightIsPercent)
                     {
-                        size.Y = baseBounds.Size.Y * GeoMath.PercentToScalar(size.Y);
+                        size.Y = realBaseBounds.Size.Y * GeoMath.PercentToScalar(size.Y);
                     }
                 }
             }
@@ -797,6 +872,14 @@ namespace Toy_Synthesizer.Game.UI
                         SetFontScale(widget, ParseFloat(value));
                         break;
 
+                    case "fittext":
+                        SetFitText(widget, ParseBool(value));
+                        break;
+
+                    case "growwithtext":
+                        SetGrowWithText(widget, ParseBool(value));
+                        break;
+
                     case "maintainvisualscale":
                         SetMaintainVisualScale(widget, ParseBool(value));
                         break;
@@ -855,6 +938,22 @@ namespace Toy_Synthesizer.Game.UI
             if (widget is ITextWidget textWidget)
             {
                 textWidget.FontScale = value;
+            }
+        }
+
+        private static void SetFitText(Widget widget, bool value)
+        {
+            if (widget is ITextWidget textWidget)
+            {
+                textWidget.FitText = value;
+            }
+        }
+
+        private static void SetGrowWithText(Widget widget, bool value)
+        {
+            if (widget is ITextWidget textWidget)
+            {
+                textWidget.GrowWithText = value;
             }
         }
 

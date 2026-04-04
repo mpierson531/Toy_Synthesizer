@@ -116,11 +116,20 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
 
         // Voice oscillator management commands
 
-        public static AudioSourceCommand AddVoiceOscillator(Voice voice, Oscillator oscillator) =>
-            AudioSourceCommand.Create((int)SynthesizerCommandType.Voice_AddOscillator, objectValue: voice, objectValue2: oscillator);
+        public static AudioSourceCommand AddVoiceOscillator(Voice voice, Oscillator oscillator)
+        {
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.Voice_AddOscillator, objectValue: voice, objectValue2: oscillator);
+        }
 
-        public static AudioSourceCommand RemoveVoiceOscillator(Voice voice, Oscillator oscillator) =>
-            AudioSourceCommand.Create((int)SynthesizerCommandType.Voice_RemoveOscillator, objectValue: voice, objectValue2: oscillator);
+        public static AudioSourceCommand RemoveVoiceOscillator(Voice voice, Oscillator oscillator)
+        {
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.Voice_RemoveOscillator, objectValue: voice, objectValue2: oscillator);
+        }
+
+        public static AudioSourceCommand ForEachVoiceOscillatorAction(Voice voice, Action<Oscillator> oscillator)
+        {
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.Voice_ForEachOscillator, objectValue: voice, objectValue2: oscillator);
+        }
 
         // Oscillator value commands
 

@@ -9,6 +9,8 @@ using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
+using SharpDX.XAudio2;
+
 using Toy_Synthesizer.Game.DigitalSignalProcessing;
 using Toy_Synthesizer.Game.Synthesizer.Frontend.Console;
 
@@ -17,7 +19,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
     // TODO: Look into Voice/StateVariableLPF default cutoffs more.
     public class PolyphonicSynthesizer : IAudioSource, IAudioSourceCommandReceiver
     {
-        public const double DEFAULT_AMPLITUDE = 0.25;
+        public const double DEFAULT_AMPLITUDE = 0.5;
         public const WaveformType DEFAULT_WAVEFORM_TYPE = WaveformType.Square;
 
         public const double MIN_CENTER_FREQUENCY = 0.0;
@@ -155,6 +157,14 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             }
         }
 
+        private void ForEachVoiceOscillator(Voice voice, Action<Oscillator> action)
+        {
+            for (int index = 0; index < voice.Oscillators.Count; index++)
+            {
+                action(voice.Oscillators.GetUnchecked(index));
+            }
+        }
+
         private void AddVoice(Voice voice,
                               bool on = false)
         {
@@ -174,21 +184,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
             if (voice.LPF_Adsr is null)
             {
-                /*voice.FilterAdsrEnvelope = new AdsrEnvelope(sampleRate)
-                {
-                    AttackSeconds = 0.005,
-                    DecaySeconds = 0.15,
-                    SustainLevel = 0.0,
-                    ReleaseSeconds = 0.1
-                };*/
-
-                voice.LPF_Adsr = new AdsrEnvelope(sampleRate)
-                {
-                    AttackSeconds = 0.0,
-                    DecaySeconds = 0.1,
-                    SustainLevel = 1.0,
-                    ReleaseSeconds = 0.0
-                };
+                voice.LPF_Adsr = voice.Adsr.Copy(deepCopy: true);
             }
             else
             {
@@ -202,36 +198,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     voice.Oscillators = new ViewableList<Oscillator>(10);
                 }
 
-                Oscillator defaultOscillator0 = new Oscillator
-                {
-                    CenterFrequency = voice.CenterFrequency,
-                    Phase = 0,
-                    Amplitude = DEFAULT_AMPLITUDE * 0.25,
-                    WaveformType = DEFAULT_WAVEFORM_TYPE,
-                    DetuneCents = 0
-                };
-
-                Oscillator defaultOscillator1 = new Oscillator
-                {
-                    CenterFrequency = voice.CenterFrequency,
-                    Phase = 0,
-                    Amplitude = DEFAULT_AMPLITUDE,
-                    WaveformType = DEFAULT_WAVEFORM_TYPE,
-                    DetuneCents = -2
-                };
-
-                Oscillator defaultOscillator2 = new Oscillator
-                {
-                    CenterFrequency = voice.CenterFrequency,
-                    Phase = 0,
-                    Amplitude = DEFAULT_AMPLITUDE,
-                    WaveformType = DEFAULT_WAVEFORM_TYPE,
-                    DetuneCents = 2
-                };
+                Oscillator defaultOscillator0 = CreateDefaultOscillator(voice.CenterFrequency);
+                Oscillator defaultOscillator1 = CreateDefaultOscillator(voice.CenterFrequency);
 
                 voice.Oscillators.Add(defaultOscillator0);
                 voice.Oscillators.Add(defaultOscillator1);
-                voice.Oscillators.Add(defaultOscillator2);
             }
 
             if (on)
@@ -506,6 +477,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     RemoveVoiceOscillator((Voice)command.ObjectValue, (Oscillator)command.ObjectValue2);
                     break;
 
+                case SynthesizerCommandType.Voice_ForEachOscillator:
+                    ForEachVoiceOscillator((Voice)command.ObjectValue, (Action<Oscillator>)command.ObjectValue2);
+                    break;
+
                 case SynthesizerCommandType.SetVoice_Oscillator_Amplitude:
                     SetVoiceOscillatorAmplitude((Oscillator)command.ObjectValue, command.ValueStorage.Read<double>());
                     break;
@@ -525,8 +500,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         private static void SetVoiceCenterFrequency(Voice voice,  double frequency)
         {
-            Game.Instance.LogManager.Debug(frequency);
-
             voice.CenterFrequency = CenterFrequencyRange.Clamp(frequency);
         }
 
@@ -645,6 +618,18 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             voice.Adsr.Reset();
 
             ResetOscillators(voice);
+        }
+
+        public static Oscillator CreateDefaultOscillator(double centerFrequency)
+        {
+            return new Oscillator
+            {
+                CenterFrequency = centerFrequency,
+                Phase = 0,
+                Amplitude = DEFAULT_AMPLITUDE,
+                WaveformType = DEFAULT_WAVEFORM_TYPE,
+                DetuneCents = 0
+            };
         }
 
         private static void ResetOscillators(Voice voice)

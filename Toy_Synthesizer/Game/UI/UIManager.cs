@@ -121,6 +121,8 @@ namespace Toy_Synthesizer.Game.UI
             public bool AnimateParentChildrenWithInterpolation;
         }
 
+        private static int RoundedRectangleTextureSize = 64;
+
         public const int PrimitiveSegments = 30;
         public const Alignment DEFAULT_TEXTBUTTON_ALIGNMENT = Alignment.Center;
         public const WindowBehaviorFlags WindowBehavior = WindowBehaviorFlags.ResizeTitle
@@ -420,17 +422,17 @@ namespace Toy_Synthesizer.Game.UI
             DropDownBorderThickness = new FloatValue(ValueMode.Absolute, (int)GeoMath.RoundAwayFromZero(game.ScaleByDisplayResolution_Min(1f)));
             WindowBorderThickness = (int)GeoMath.RoundAwayFromZero(game.ScaleByDisplayResolution_Min(1f));
 
-            TextButtonTexture = TexMaker.RoundedRectangle(geo.GraphicsDevice, 128, 128, TextButtonCornerRadius, 0, Color.White, Color.Black);
+            TextButtonTexture = TexMaker.RoundedRectangle(geo.GraphicsDevice, RoundedRectangleTextureSize, RoundedRectangleTextureSize, TextButtonCornerRadius, 0, Color.White, Color.Black);
 
             // TextButton texture for white border when hovered.
             //TextButtonHoveredTexture = TexMaker.RoundedRectangle(geo.GraphicsDevice, 128, 128, TextButtonCornerRadius, TextButtonCornerRadius, TextButtonHoveredColor, DarkWhite);
 
-            TextFieldTexture = TexMaker.RoundedRectangle(geo.GraphicsDevice, 128, 128, TextFieldCornerRadius, 0, Color.White, Color.Black);
+            TextFieldTexture = TexMaker.RoundedRectangle(geo.GraphicsDevice, RoundedRectangleTextureSize, RoundedRectangleTextureSize, TextFieldCornerRadius, 0, Color.White, Color.Black);
             /*TextFieldTexture = TexMaker.RoundedRectangle(geo.GraphicsDevice, 64, 64, TextFieldCornerRadius, TextFieldActiveBorderThickness, Color.White, Color.Black);
             TextFieldHoverTexture = TexMaker.RoundedRectangle(geo.GraphicsDevice, 64, 64, TextFieldCornerRadius, TextFieldHoverBorderThickness, Color.White, Color.Black);
             TextFieldInactiveTexture = TexMaker.RoundedRectangle(geo.GraphicsDevice, 64, 64, TextFieldCornerRadius, 0, Color.White, Color.Black);*/
 
-            CheckboxTexture = TexMaker.RoundedRectangle(geo.GraphicsDevice, 128, 128,
+            CheckboxTexture = TexMaker.RoundedRectangle(geo.GraphicsDevice, RoundedRectangleTextureSize, RoundedRectangleTextureSize,
                                                         CheckboxBackgroundCornerRadius,
                                                         CheckboxBackgroundBorderThickness,
                                                         Color.Black,
@@ -465,7 +467,9 @@ namespace Toy_Synthesizer.Game.UI
                 GrowInterpolation = Interpolation.Smooth2
             };
 
-            TooltipTexture = TexMaker.GetPixel(geo.GraphicsDevice, new Color(25, 25, 25, 255));
+            Color tooltipBackgroundColor = new Color(25, 25, 25, 255);
+
+            TooltipTexture = TexMaker.GetPixel(geo.GraphicsDevice, tooltipBackgroundColor);
 
             TextFieldTint = DarkWhite;
             TextFieldTextHoverColor = Color.Black;
@@ -1724,7 +1728,7 @@ namespace Toy_Synthesizer.Game.UI
                 nonNullUXData.ButtonUXData = DefaultButtonUXData;
             }
 
-            if (coverButtonText is null)
+            if (coverButtonText is null && !CollectionUtils.IsNullOrEmpty(values))
             {
                 coverButtonText = ToStringConverter.Convert(toStringConverter, values[defaultIndex]);
             }
@@ -2109,7 +2113,7 @@ namespace Toy_Synthesizer.Game.UI
             Color fillColor = BackgroundedLabelTint.ScaleRGB(0.6f);
             Color borderColor = BackgroundedLabelTint.ScaleRGB(1.5f);
 
-            Texture2D texture = TexMaker.RoundedRectangle(geo.GraphicsDevice, 128, 128,
+            Texture2D texture = TexMaker.RoundedRectangle(geo.GraphicsDevice, RoundedRectangleTextureSize, RoundedRectangleTextureSize,
                                                           cornerRadius, 
                                                           borderThickness, 
                                                           fillColor, borderColor);
@@ -3346,6 +3350,173 @@ namespace Toy_Synthesizer.Game.UI
             AddAction_OnRemoved_Return(action);
 
             return action;
+        }
+
+        public static void ShiftDrawer_ChildAdded(Drawer drawer, Widget child)
+        {
+            // Attempts to find spacing between added child and closest child that was after the added child (in terms of position).
+
+            PreciseGroupLayoutAdapter drawerLayoutAdapter = drawer.Adapters.FindFirstOfType<PreciseGroupLayoutAdapter>();
+            ReadOnlySpan<PreciseGroupLayoutAdapter.WidgetState> drawerLayoutStates = drawerLayoutAdapter.GetWidgetStates();
+
+            Vec2f shiftDelta = Vec2f.Zero;
+            float minDistance = float.MaxValue;
+            bool neighborFound = false;
+
+            Vec2f childPosition = child.Position;
+            Vec2f childMax = childPosition + child.Size;
+
+            for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
+            {
+                PreciseGroupLayoutAdapter.WidgetState state = drawerLayoutStates[i];
+
+                if (state.widget == child || state.widget == drawer.CoverButton)
+                {
+                    continue;
+                }
+
+                Vec2f currentStatePosition = state.widget.Position;
+
+                if (drawer.Direction == LayoutOrientation.Horizontal && GeoMath.GT_Precise(currentStatePosition.X, childPosition.X))
+                {
+                    float dist = currentStatePosition.X - childMax.X;
+
+                    if (dist < minDistance)
+                    {
+                        minDistance = dist;
+
+                        neighborFound = true;
+                    }
+                }
+                else if (drawer.Direction == LayoutOrientation.Vertical && GeoMath.GT_Precise(currentStatePosition.Y, childPosition.Y))
+                {
+                    float dist = currentStatePosition.Y - childMax.Y;
+
+                    if (dist < minDistance)
+                    {
+                        minDistance = dist;
+
+                        neighborFound = true;
+                    }
+                }
+            }
+
+            if (neighborFound)
+            {
+                if (drawer.Direction == LayoutOrientation.Horizontal)
+                {
+                    shiftDelta.X = child.Size.X + minDistance;
+                }
+                else if (drawer.Direction == LayoutOrientation.Vertical)
+                {
+                    shiftDelta.Y = child.Size.Y + minDistance;
+                }
+
+                for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
+                {
+                    PreciseGroupLayoutAdapter.WidgetState state = drawerLayoutStates[i];
+
+                    if (state.widget == child || state.widget == drawer.CoverButton)
+                    {
+                        continue;
+                    }
+
+                    Vec2f currentStatePosition = state.widget.Position;
+
+                    bool needsShifted = (drawer.Direction == LayoutOrientation.Horizontal && GeoMath.GTE_Precise(currentStatePosition.X, childPosition.X)) ||
+                                       (drawer.Direction == LayoutOrientation.Vertical && GeoMath.GTE_Precise(currentStatePosition.Y, childPosition.Y));
+
+                    if (needsShifted)
+                    {
+                        drawerLayoutAdapter.TrySetNormalizedBounds(state.widget,
+                                                                   PreciseGroupLayoutAdapter.GetNormalizedBounds(drawer, new AABB
+                                                                   {
+                                                                       Position = currentStatePosition + shiftDelta,
+                                                                       Size = state.widget.Size
+                                                                   }));
+                    }
+                }
+            }
+        }
+
+        // TODO: Implement finding child closest to child, rather than first child.
+        public static void ShiftDrawer_ChildRemoved(Drawer drawer, Widget child)
+        {
+            // TODO: May need adjusted for horizontal layouts.
+
+            PreciseGroupLayoutAdapter drawerLayoutAdapter = drawer.Adapters.FindFirstOfType<PreciseGroupLayoutAdapter>();
+
+            ReadOnlySpan<PreciseGroupLayoutAdapter.WidgetState> drawerLayoutStates = drawerLayoutAdapter.GetWidgetStates();
+
+            float detectedSpacing = 0f;
+
+            bool spacingFound = false;
+
+            // Attempts to find spacing between removed child and first child that was after the removed child (in terms of position).
+
+            for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
+            {
+                Widget otherChild = drawerLayoutStates[i].widget;
+
+                if (otherChild == drawer.CoverButton || otherChild == child)
+                {
+                    continue;
+                }
+
+                if (drawer.Direction == LayoutOrientation.Horizontal && otherChild.Position.X >= child.Position.X)
+                {
+                    detectedSpacing = otherChild.Position.X - child.GetMaxX();
+
+                    spacingFound = true;
+
+                    break;
+                }
+                else if (drawer.Direction == LayoutOrientation.Vertical && otherChild.Position.Y >= child.Position.Y)
+                {
+                    detectedSpacing = otherChild.Position.Y - child.GetMaxY();
+
+                    spacingFound = true;
+
+                    break;
+                }
+            }
+
+            if (spacingFound)
+            {
+                Vec2f shiftDelta = Vec2f.Zero;
+
+                if (drawer.Direction == LayoutOrientation.Horizontal)
+                {
+                    shiftDelta.X = child.Size.X + detectedSpacing;
+                }
+                else if (drawer.Direction == LayoutOrientation.Vertical)
+                {
+                    shiftDelta.Y = child.Size.Y + detectedSpacing;
+                }
+
+                for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
+                {
+                    PreciseGroupLayoutAdapter.WidgetState state = drawerLayoutStates[i];
+
+                    if (state.widget == drawer.CoverButton || state.widget == child)
+                    {
+                        continue;
+                    }
+
+                    bool isAfter = (drawer.Direction == LayoutOrientation.Horizontal && state.widget.Position.X > child.Position.X) ||
+                                   (drawer.Direction == LayoutOrientation.Vertical && state.widget.Position.Y > child.Position.Y);
+
+                    if (isAfter)
+                    {
+                        drawerLayoutAdapter.TrySetNormalizedBounds(state.widget,
+                                                                   PreciseGroupLayoutAdapter.GetNormalizedBounds(drawer, new AABB
+                                                                   {
+                                                                       Position = state.widget.Position - shiftDelta,
+                                                                       Size = state.widget.Size
+                                                                   }));
+                    }
+                }
+            }
         }
 
         private static void AddAction_OnRemoved_Return<T>(T action) where T : ActorAction

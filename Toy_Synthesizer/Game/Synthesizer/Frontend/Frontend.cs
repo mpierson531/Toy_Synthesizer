@@ -142,7 +142,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             {
                 for (int index = 0; index < voices.Length; index++)
                 {
-                    voices[index].LPF = new StateVariableLPF(12000, 0.2, game.Synthesizer.SampleRate);
+                    voices[index].LPF = new StateVariableLPF(20000, 0.25, game.Synthesizer.SampleRate);
                 }
 
                 for (int index = 0; index < voices.Length; index++)
@@ -163,8 +163,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             });
 
             game.Synthesizer.SendCommand(ref forEachVoiceCommand);
-
-            game.DSP.AddAudioEffect(new DigitalSignalProcessing.BuiltinAudioEffects.Delays.SimpleFeedbackDelay(game.DSP));
 
             voiceProperties = new ViewableList<Property<Voice>>();
 
@@ -440,7 +438,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             int[] semitoneOffsets = { 0, 2, 4, 5, 7, 9, 11 }; // C, D, E, F, G, A, B
 
             int startOctave = MidiUtils.GetOctave(startNote);
-            int additionalLayerCount = 3;
+            int additionalLayerCount = 0;
 
             ViewableList<ValueTuple<Keys, ImmutableArray<Voice>>> voices = new ViewableList<ValueTuple<Keys, ImmutableArray<Voice>>>();
 

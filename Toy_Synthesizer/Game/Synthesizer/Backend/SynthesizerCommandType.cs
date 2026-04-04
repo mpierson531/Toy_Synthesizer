@@ -41,6 +41,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         Voice_AddOscillator,
         Voice_RemoveOscillator,
+        Voice_ForEachOscillator,
 
         SetVoice_Oscillator_Amplitude,
         SetVoice_Oscillator_WaveformType,

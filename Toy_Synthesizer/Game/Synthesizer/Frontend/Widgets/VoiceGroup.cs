@@ -26,12 +26,13 @@ using Toy_Synthesizer.Game.UI;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
-    // TODO: Implement oscillator control group.
     public class VoiceGroup : ScrollPane
     {
-        private Game game;
+        internal Game game;
 
         private Voice voice;
+
+        private UIXmlParser uiXmlParser;
 
         public Voice Voice
         {
@@ -45,7 +46,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
                 if (voice is not null)
                 {
-                    UpdatePropertiesFromVoice();
+                    UpdateFromVoice();
                 }
 
                 OnVoiceChanged?.Invoke(this, previous, voice);
@@ -70,6 +71,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private PropertyBindable<double> releasePropertyBindable;
         private ConvertingPropertyBinding<double, string> releaseBinding;
 
+        //private ViewableList<VoiceOscillatorControlGroup> currentOscillatorControlGroups;
+
         private PlainLabel NameDisplayLabel;
         private TextField NameTextField;
 
@@ -85,6 +88,16 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private TextField SustainTextField;
         private TextField ReleaseTextField;
 
+        private Drawer oscillatorsDrawer;
+
+        private Button addOscillatorButton;
+        private IListener addOscillatorsButtonTooltip;
+
+        private float drawerBeginX_Percent = 20f;
+        private float drawerBeginY_Percent = 160f;
+        private readonly float oscillatorsVerticalDrawerSpacing_Percent = 50f;
+        private readonly Vec2f oscillatorsDrawerChildSize_Percent = new Vec2f(240f, 500f);
+
         public event Action<VoiceGroup, Voice, Voice> OnVoiceChanged;
 
         public VoiceGroup(Vec2f position, Vec2f size, Voice voice, Game game)
@@ -98,6 +111,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             InitPropertyBindables();
 
+            //currentOscillatorControlGroups = new ViewableList<VoiceOscillatorControlGroup>(100);
+
             game.UIManager.InitScrollPane(this);
 
             Style.RenderData.SetColor(game.UIManager.BackgroundedLabelTint);
@@ -107,8 +122,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             CreateWidgets(game.UIManager);
 
             Voice = voice;
-
-            FindAs<Drawer>(widget => widget is not null).CollapseInternal(false);
         }
 
         private void InitPropertyBindables()
@@ -130,13 +143,14 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void CreateWidgets(UIManager uiManager)
         {
-            UIXmlParser xmlParser = new UIXmlParser(uiManager);
+            uiXmlParser = new UIXmlParser(uiManager);
 
-            xmlParser.AddTypeFactory(new VoiceMixControlGroupFactory());
+            uiXmlParser.AddTypeFactory(new VoiceMixControlGroupFactory());
+            uiXmlParser.AddTypeFactory(new VoiceOscillatorControlGroupFactory());
 
             string uiXml = GetUIXml();
 
-            xmlParser.Parse(uiXml, rootParent: this);
+            uiXmlParser.Parse(uiXml, rootParent: this);
 
             NameDisplayLabel = FindAsByNameDeepSearch<PlainLabel>(NameLabelName);
             NameTextField = FindAsByNameDeepSearch<TextField>(NameTextFieldName);
@@ -164,6 +178,14 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             decayBinding = DecayTextField.BindProperty_Number(decayPropertyBindable);
             sustainBinding = SustainTextField.BindProperty_Number(sustainPropertyBindable);
             releaseBinding = ReleaseTextField.BindProperty_Number(releasePropertyBindable);
+
+            oscillatorsDrawer = FindAsByNameDeepSearch<Drawer>(OscillatorsDrawerName);
+
+            addOscillatorButton = FindAsByNameDeepSearch<Button>(AddOscillatorButtonName);
+
+            addOscillatorButton.OnClick += AddOscillatorButton_OnClick;
+
+            addOscillatorsButtonTooltip = uiManager.AddTextTooltip(addOscillatorButton, "Click to add an oscillator");
 
             InitTooltips(uiManager);
         }
@@ -206,9 +228,40 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             uiManager.AddTextTooltip(ReleaseTextField, releaseDescription);
         }
 
-        private void InitOscillatorWidgets()
+        private void AddOscillatorButton_OnClick()
         {
-            
+            // TODO: Add animated/velocity-based scrolling to the position of the new oscillator widget
+
+            Oscillator oscillator = PolyphonicSynthesizer.CreateDefaultOscillator(Voice.CenterFrequency);
+
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.AddVoiceOscillator(Voice, oscillator));
+
+            string uiXml = GetOscillatorUIXml(drawerBeginY_Percent);
+
+            VoiceOscillatorControlGroup newOscillatorWidget = (VoiceOscillatorControlGroup)uiXmlParser.Parse(uiXml,
+                                                                                                             rootParentBaseBounds: new AABB(oscillatorsDrawer.Position, oscillatorsDrawer.PreExpansionSize))[0];
+
+            UIManager.ShiftDrawer_ChildAdded(oscillatorsDrawer, newOscillatorWidget);
+
+            newOscillatorWidget.oscillator = oscillator;
+
+            oscillatorsDrawer.AddChild(newOscillatorWidget);
+
+            newOscillatorWidget.UpdateFromVoice();
+        }
+
+        internal void RemoveOscillatorAndGroup(VoiceOscillatorControlGroup oscillatorControlGroup)
+        {
+            if (!oscillatorsDrawer.Contains(oscillatorControlGroup))
+            {
+                throw new InvalidOperationException("Oscillator does not exist.");
+            }
+
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.RemoveVoiceOscillator(Voice, oscillatorControlGroup.oscillator));
+
+            UIManager.ShiftDrawer_ChildRemoved(oscillatorsDrawer, oscillatorControlGroup);
+
+            oscillatorsDrawer.RemoveChild(oscillatorControlGroup);
         }
 
         private void SetVoiceName(string name)
@@ -223,7 +276,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceName(Voice, name));
         }
 
-        private void UpdatePropertiesFromVoice()
+        private void UpdateFromVoice()
         {
             namePropertyBindable.SetValueRaw(Voice.Name);
 
@@ -242,19 +295,32 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             DecayTextField.SetTextWithoutProperty(Voice.Adsr.DecaySeconds.ToString());
             SustainTextField.SetTextWithoutProperty(Voice.Adsr.SustainLevel.ToString());
             ReleaseTextField.SetTextWithoutProperty(Voice.Adsr.ReleaseSeconds.ToString());
+
+            for (int index = 0; index < oscillatorsDrawer.Count; index++)
+            {
+                if (oscillatorsDrawer[index] is VoiceOscillatorControlGroup)
+                {
+                    oscillatorsDrawer.RemoveChildAt(index);
+
+                    index--;
+                }
+            }
+
+            string oscillatorsUIXml = GetOscillatorsUIXml();
+
+            uiXmlParser.Parse(oscillatorsUIXml, rootParent: oscillatorsDrawer);
+
+            ForEachOfTypeWithIndex<VoiceOscillatorControlGroup>((index, oscillatorControlGroup) =>
+            {
+                oscillatorControlGroup.oscillator = Voice.Oscillators[index];
+
+                oscillatorControlGroup.UpdateFromVoice();
+            }, start: 0, end: Count);
         }
 
         private void SetFrequency(double frequency)
         {
             game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceCenterFrequency(Voice, frequency));
-        }
-
-        private void SetAdsr(double attack, double decay, double sustain, double release)
-        {
-            SetAttack(attack);
-            SetDecay(decay);
-            SetSustain(sustain);
-            SetRelease(release);
         }
 
         private void SetAttack(double attack)
@@ -311,39 +377,39 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 <!--ADSR-->
 
     <Drawer Position=""(5%, 21.25%)"" 
-            Size=""(25%, 12.5%)"" 
+            Size=""(30%, 12.5%)"" 
             CoverText=""ADSR""
             Name=""{AdsrDrawerName}"">
 
-        <PlainLabel Position=""(20%, 120%)"" 
+        <PlainLabel Position=""({drawerBeginX_Percent}%, {drawerBeginY_Percent}%)"" 
                     Size=""(100%, 100%)""
                     Text=""Attack:"" 
                     FitText=""false"" 
                     GrowWithText=""true"" 
                     Name=""{AttackDisplayLabelName}""/>
 
-        <PlainLabel Position=""(20%, 260%)"" 
+        <PlainLabel Position=""({drawerBeginX_Percent}%, 300%)"" 
                     Size=""(100%, 100%)""
                     Text=""Decay:"" 
                     FitText=""false"" 
                     GrowWithText=""true"" 
                     Name=""{DecayDisplayLabelName}""/>
 
-        <PlainLabel Position=""(20%, 400%)"" 
+        <PlainLabel Position=""({drawerBeginX_Percent}%, 440%)"" 
                     Size=""(100%, 100%)""
                     Text=""Sustain:"" 
                     FitText=""false"" 
                     GrowWithText=""true"" 
                     Name=""{SustainDisplayLabelName}""/>
 
-        <PlainLabel Position=""(20%, 540%)"" 
+        <PlainLabel Position=""({drawerBeginX_Percent}%, 580%)"" 
                     Size=""(100%, 100%)""
                     Text=""Release:"" 
                     FitText=""false"" 
                     GrowWithText=""true"" 
                     Name=""{ReleaseDisplayLabelName}""/>
 
-        <TextField Position=""(130%, 120%)"" 
+        <TextField Position=""(130%, {drawerBeginY_Percent}%)"" 
                    Size=""(90%, 100%)"" 
                    MaxCharacters=""20"" 
                    NumberMinValue=""{PolyphonicSynthesizer.AttackRange.Min}""
@@ -352,7 +418,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                    TreatAsScalarPercentage=""false""
                    Name=""{AttackTextFieldName}""/>
 
-        <TextField Position=""(130%, 260%)"" 
+        <TextField Position=""(130%, 300%)"" 
                    Size=""(90%, 100%)"" 
                    MaxCharacters=""20"" 
                    NumberMinValue=""{PolyphonicSynthesizer.DecayRange.Min}""
@@ -361,7 +427,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                    TreatAsScalarPercentage=""false""
                    Name=""{DecayTextFieldName}""/>
 
-        <TextField Position=""(130%, 400%)"" 
+        <TextField Position=""(130%, 440%)"" 
                    Size=""(90%, 100%)"" 
                    MaxCharacters=""20"" 
                    NumberMinValue=""{PolyphonicSynthesizer.SustainRange.Min}""
@@ -370,7 +436,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                    TreatAsScalarPercentage=""false""
                    Name=""{SustainTextFieldName}""/>
 
-        <TextField Position=""(130%, 540%)"" 
+        <TextField Position=""(130%, 580%)"" 
                    Size=""(90%, 100%)"" 
                    MaxCharacters=""20"" 
                    NumberMinValue=""{PolyphonicSynthesizer.ReleaseRange.Min}""
@@ -384,7 +450,68 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
     <VoiceMixControlGroup Position=""(5%, 38.75%)""
                           Size=""(90%, 20%)""/>
 
+    <Drawer Position=""(5%, 64%)"" 
+            Size=""(30%, 12.5%)"" 
+            CoverText=""Oscillators""
+            Name=""{OscillatorsDrawerName}"">
+            
+            <TextButton
+                 Position=""(100%, 25%)""
+                 Size=""(100%, 75%)""
+                 Text=""+""
+                 Alignment=""Center""
+                 SizeMode=""Min""
+                 FitText=""false""
+                 Name=""{AddOscillatorButtonName}""/>
+    </Drawer>
+
 </Layout>";
+        }
+
+        private string GetOscillatorsUIXml()
+        {
+            if (Voice is null)
+            {
+                return null;
+            }
+
+            float verticalSpacing_Percent = oscillatorsDrawerChildSize_Percent.Y + oscillatorsVerticalDrawerSpacing_Percent;
+            float currentPositionY_Percent = drawerBeginY_Percent;
+            //float verticalSpacing_Percent = 50f;
+            //float currentPositionY_Percent = 60f;
+
+            StringBuilder stringBuilder = new StringBuilder();
+
+            for (int index = 0; index < Voice.Oscillators.Count; index++)
+            {
+                /*string oscillatorXml = $@"<VoiceOscillatorControlGroup 
+                                           Position=""(5%, {currentPositionY_Percent}%)"" 
+                                           Size=""(90%, 50%)""
+                                           Style=""DrawerStyle""/>";*/
+
+                string oscillatorXml = GetOscillatorUIXml(currentPositionY_Percent);
+
+                stringBuilder.Append(oscillatorXml);
+                stringBuilder.AppendLine();
+
+                currentPositionY_Percent += verticalSpacing_Percent;
+            }
+
+            return $@"<Layout>
+
+            {stringBuilder.ToString()}
+
+            </Layout>";
+        }
+
+        private string GetOscillatorUIXml(float positionY_Percent)
+        {
+            string oscillatorXml = $@"<VoiceOscillatorControlGroup 
+                                           Position=""({drawerBeginX_Percent}%, {positionY_Percent}%)"" 
+                                           Size=""({oscillatorsDrawerChildSize_Percent.X}%, {oscillatorsDrawerChildSize_Percent.Y}%)""
+                                           Style=""DrawerStyle""/>";
+
+            return oscillatorXml;
         }
 
         protected override void DisposeInternal(bool fromFinalizer)
@@ -411,6 +538,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             decayBinding = null;
             sustainBinding = null;
             releaseBinding = null;
+
+            //currentOscillatorControlGroups = null;
         }
 
         private const string NameLabelName = "NameLabel";
@@ -433,6 +562,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private const string OscillatorsDrawerName = "OscillatorsDrawer";
 
+        private const string AddOscillatorButtonName = "AddOscillatorButton";
+
         private class VoiceMixControlGroupFactory : UIXmlParser.TypeFactory
         {
             public VoiceMixControlGroupFactory() : base("VoiceMixControlGroup")
@@ -444,6 +575,20 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             {
                 return new VoiceMixControlGroup(position, size,
                                                 game: uiManager.Game);
+            }
+        }
+
+        private class VoiceOscillatorControlGroupFactory : UIXmlParser.TypeFactory
+        {
+            public VoiceOscillatorControlGroupFactory() : base("VoiceOscillatorControlGroup")
+            {
+
+            }
+
+            public override Widget Create(UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            {
+                return new VoiceOscillatorControlGroup(position, size,
+                                                       uiManager: uiManager);
             }
         }
     }

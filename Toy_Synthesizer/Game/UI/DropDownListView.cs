@@ -2,6 +2,8 @@
 
 using FontStashSharp;
 
+using GeoLib.GeoGraphics.UI.Data;
+using GeoLib.GeoGraphics.UI.Data.Generic;
 using GeoLib.GeoGraphics.UI.Widgets;
 using GeoLib.GeoMaths;
 using GeoLib.GeoUtils.Collections;
@@ -56,6 +58,21 @@ namespace Toy_Synthesizer.Game.UI
                                            toStringProvider: toStringProvider))
         {
 
+        }
+
+        public void SetValueWithoutProperty(object value)
+        {
+            dropDownListAdapter.SetValueWithoutProperty(value);
+        }
+
+        public ConvertingPropertyBinding<T, object> BindProperty<T>(PropertyBindable<T> property, Func<T, object> sourceToTarget, Func<object, T> targetToSource)
+        {
+            return dropDownListAdapter.BindProperty(property, sourceToTarget, targetToSource);
+        }
+
+        public ConvertingPropertyBinding<T, object> BindProperty<T>(PropertyBindable<T> property)
+        {
+            return dropDownListAdapter.BindProperty(property);
         }
 
         protected override void AdapterInitialized(DropDownAdapter adapter)

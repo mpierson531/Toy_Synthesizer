@@ -4,6 +4,8 @@ using FontStashSharp;
 
 using GeoLib;
 using GeoLib.GeoGraphics.UI;
+using GeoLib.GeoGraphics.UI.Data;
+using GeoLib.GeoGraphics.UI.Data.Generic;
 using GeoLib.GeoGraphics.UI.Widgets;
 using GeoLib.GeoMaths;
 using GeoLib.GeoUtils.Collections;
@@ -17,8 +19,15 @@ namespace Toy_Synthesizer.Game.UI
 
         private static string[] GetNames(ViewableList<object> values, ToStringConverter converter)
         {
+            if (CollectionUtils.IsNullOrEmpty(values))
+            {
+                return Array.Empty<string>();
+            }
+
             return values.ProcessToArray<string>(value => ToStringConverter.Convert(converter, value));
         }
+
+        private IPropertyBinding propertyBinding;
 
         private ViewableList<object> values;
         private object previousValue;
@@ -41,13 +50,13 @@ namespace Toy_Synthesizer.Game.UI
 
         public int ValueCount
         {
-            get => values.Count;
+            get => CollectionUtils.IsNullOrEmpty(values) ? 0 : values.Count;
         }
 
         public object CurrentValue
         {
             get => currentValue;
-            set => SetCurrentValue(value);
+            set => SetCurrentValue(value, updateProperty: true);
         }
 
         public int CurrentIndex
@@ -83,7 +92,7 @@ namespace Toy_Synthesizer.Game.UI
                                ToStringConverter toStringProvider)
             : base(group: group,
                    itemNames: GetNames(values, toStringProvider),
-                   itemCount: values.Count,
+                   itemCount: CollectionUtils.IsNullOrEmpty(values) ? 0 : values.Count,
                    coverButtonProvider: coverButtonProvider,
                    childProvider: childProvider,
                    groupProvider: groupProvider,
@@ -116,26 +125,73 @@ namespace Toy_Synthesizer.Game.UI
             }
         }
 
+        public void SetValueWithoutProperty(object value)
+        {
+            SetCurrentValue(value, updateProperty: false);
+        }
+
+        public ConvertingPropertyBinding<T, object> BindProperty<T>(PropertyBindable<T> property, Func<T, object> sourceToTarget, Func<object, T> targetToSource)
+        {
+            if (propertyBinding is not null)
+            {
+                propertyBinding.Dispose();
+            }
+
+            propertyBinding = new ConvertingPropertyBinding<T, object>(property, Property_GetTarget, Property_SetTarget, sourceToTarget, targetToSource);
+
+            return (ConvertingPropertyBinding<T, object>)propertyBinding;
+        }
+
+        public ConvertingPropertyBinding<T, object> BindProperty<T>(PropertyBindable<T> property)
+        {
+            if (propertyBinding is not null)
+            {
+                propertyBinding.Dispose();
+            }
+
+            propertyBinding = new ConvertingPropertyBinding<T, object>(property, Property_GetTarget, Property_SetTarget, Property_DefaultSourceToTarget<T>, Property_DefaultTargetToSource<T>);
+
+            return (ConvertingPropertyBinding<T, object>)propertyBinding;
+        }
+
+        private object Property_GetTarget()
+        {
+            return CurrentValue;
+        }
+
+        private void Property_SetTarget(object value)
+        {
+            SetCurrentValue(value, updateProperty: false);
+        }
+
+        private static object Property_DefaultSourceToTarget<T>(T value)
+        {
+            return value;
+        }
+
+        private static T Property_DefaultTargetToSource<T>(object value)
+        {
+            return (T)value;
+        }
+
         protected override void SelectInternal(Button button, int index)
         {
-            base.SelectInternal(button, index);
-
             SetCurrentValue(index);
         }
 
-        private void SetCurrentValue(object value)
+        private void SetCurrentValue(object value, bool updateProperty)
         {
             int index = values.IndexOf(value);
 
-            SetCurrentValueInternal(CurrentIndex, index, CurrentValue, value);
+            SetCurrentValueInternal(CurrentIndex, index, CurrentValue, value, updateProperty);
         }
 
         private void SetCurrentValue(int index)
         {
-            SetCurrentValueInternal(CurrentIndex, index, CurrentValue, values[index]);
+            SetCurrentValueInternal(CurrentIndex, index, CurrentValue, values[index], updateProperty: true);
         }
 
-        private void SetCurrentValueInternal(int previousIndex, int index, object previousValue, object value)
+        private void SetCurrentValueInternal(int previousIndex, int index, object previousValue, object value, bool updateProperty)
         {
             this.previousIndex = previousIndex;
             this.previousValue = previousValue;
@@ -149,37 +205,12 @@ namespace Toy_Synthesizer.Game.UI
             }
 
             OnValueChanged?.Invoke(previousValue, previousIndex, currentValue, index);
-        }
 
-        /*private void SetCurrent(int index)
-        {
-            int previousIndex = currentIndex;
-
-            SetCurrentInternal(previousIndex, index, invokeOnValueChanged: true);
-        }
-
-        protected internal void SetCurrentRaw(object value)
-        {
-            SetCurrentInternal(previousValue, value, invokeOnValueChanged: false);
-        }
-
-        private void SetCurrentInternal(object previousValue, object value, bool invokeOnValueChanged)
-        {
-            currentValue = values[index];
-            currentIndex = index;
-
-            if (CoverButton is ITextWidget coverButtonTextWidget)
+            if (updateProperty && propertyBinding is not null)
             {
-                coverButtonTextWidget.Text = ConvertToString(currentValue);
+                propertyBinding.UpdateSource();
             }
-
-            if (invokeOnValueChanged && OnValueChanged is not null)
-            {
-                object previousValue = previousIndex < 0 ? null : values[previousIndex];
-
-                OnValueChanged(previousValue, previousIndex, currentValue, index);
-            }
-        }*/
+        }
 
         private string ConvertToString(object value)
         {
@@ -208,6 +239,18 @@ namespace Toy_Synthesizer.Game.UI
                 TextButton button = (TextButton)DropDownGroup[index];
 
                 button.Text = ConvertToString(index);
+            }
+        }
+
+        protected override void DisposeInternal(bool fromFinalizer)
+        {
+            base.DisposeInternal(fromFinalizer);
+
+            if (propertyBinding is not null)
+            {
+                propertyBinding.Dispose();
+
+                propertyBinding = null;
             }
         }
 
@@ -257,205 +300,4 @@ namespace Toy_Synthesizer.Game.UI
             return new ValueTuple<Vec2f, Vec2f>(min, max);
         }
     }
-
-
-
-
-    /*public class DropDownListAdapter<T> : DropDownAdapter
-    {
-        private readonly T[] values;
-        private T currentValue;
-        private Func<T, string> toStringProvider;
-
-        public Func<T, string> ToStringProvider
-        {
-            get => toStringProvider;
-
-            set
-            {
-                toStringProvider = value;
-
-                UpdateNames();
-            }
-        }
-
-        public T CurrentValue
-        {
-            get => currentValue;
-
-            set
-            {
-                *//*if (!values.Contains(value))
-                {
-                    throw new InvalidOperationException("value is not contained in the set dropdown values.");
-                }*//*
-
-                SetCurrentValue(ref value);
-            }
-        }
-
-        public Action<T, T> OnValueChange { get; set; }
-
-        // This will mutate group.
-        // Any children you manually add will be affected by this object.
-        public DropDownListAdapter(GroupWidget group,
-                               Func<Vec2f, Vec2f, Button> coverButtonProvider,
-                               Func<int, Vec2f, Vec2f, Button> childProvider,
-                               Func<Vec2f, Vec2f, GroupWidget> groupProvider,
-                               Func<DropDownAdapter, Vec2f> dropDownPositionGetter,
-                               Func<DropDownAdapter, Vec2f> dropDownSizeGetter,
-                               Func<DropDownAdapter, Vec2f> buttonStartPositionGetter,
-                               Func<DropDownAdapter, Vec2f> buttonSizeGetter,
-                               Func<DropDownAdapter, Vec2f> buttonSpacingGetter,
-                                   T[] values, T defaultValue,
-                                   Func<T, string> toStringProvider)
-            : base(group,
-                   count: values.Length,
-                   coverButtonProvider: coverButtonProvider,
-                   childProvider: childProvider,
-                   groupProvider: groupProvider,
-                   dropDownPositionGetter: dropDownPositionGetter,
-                   dropDownSizeGetter: dropDownSizeGetter,
-                   buttonStartPositionGetter: buttonStartPositionGetter,
-                   buttonSizeGetter: buttonSizeGetter,
-                   buttonSpacingGetter: buttonSpacingGetter)
-        {
-            this.toStringProvider = toStringProvider;
-
-            this.values = Utils.ArrayCopy(values);
-
-            currentValue = defaultValue;
-
-            OnSelect = delegate (Button button, int index)
-            {
-                SetCurrentValue(ref this.values[index]);
-            };
-        }
-
-        private void SetCurrentValue(ref T value)
-        {
-            int indexOf = Array.IndexOf(values, value);
-
-            if (indexOf == -1)
-            {
-                SetCurrentValueInternal(currentValue, value);
-
-                return;
-            }
-
-            SetCurrentValue(indexOf);
-        }
-
-        private void SetCurrentValue(int index)
-        {
-            T previousValue = currentValue;
-
-            SetCurrentValueInternal(previousValue, values[index]);
-        }
-
-        private void SetCurrentValueInternal(T previousValue, T value)
-        {
-            currentValue = value;
-
-            if (CoverButton is ITextWidget coverButtonTextWidget)
-            {
-                coverButtonTextWidget.Text = ConvertToString(currentValue);
-            }
-
-            OnValueChange?.Invoke(previousValue, currentValue);
-        }
-
-        private string ConvertToString(T value)
-        {
-            if (ToStringProvider is null)
-            {
-                return Convert.ToString(value);
-            }
-
-            return ToStringProvider(value);
-        }
-
-        public void SetFont(DynamicSpriteFont font)
-        {
-            GeoDebug.Assert(Group.Contains(CoverButton));
-
-            Group.ForEachOfType<ITextWidget>(delegate (ITextWidget textWidget)
-            {
-                textWidget.Font = font;
-            });
-
-            DropDownGroup.ForEachOfType<ITextWidget>(delegate (ITextWidget textWidget)
-            {
-                textWidget.Font = font;
-            });
-        }
-
-        private void UpdateNames()
-        {
-            if (ToStringProvider is not null)
-            {
-                for (int index = 0; index != values.Length; index++)
-                {
-                    TextButton button = (TextButton)DropDownGroup[index];
-
-                    button.Text = ToStringProvider(values[index]);
-                }
-            }
-            else
-            {
-                for (int index = 0; index != values.Length; index++)
-                {
-                    TextButton button = (TextButton)DropDownGroup[index];
-
-                    button.Text = Convert.ToString(values[index]);
-                }
-            }
-        }
-
-        private static ValueTuple<Vec2f, Vec2f> FindMinAndMax(GroupWidget group)
-        {
-            Vec2f min = group.Position;
-            Vec2f max = group.Position;
-
-            for (int index = 0; index != group.Count; index++)
-            {
-                Widget child = group.GetUnchecked(index);
-
-                if (child is GroupWidget)
-                {
-                    ValueTuple<Vec2f, Vec2f> childGroupMinMax = FindMinAndMax((GroupWidget)child);
-
-                    min.X = MathF.Min(min.X, MathF.Min(childGroupMinMax.Item1.X, childGroupMinMax.Item2.X));
-                    min.Y = MathF.Min(min.Y, MathF.Min(childGroupMinMax.Item1.Y, childGroupMinMax.Item2.Y));
-
-                    max.X = MathF.Max(max.X, MathF.Max(childGroupMinMax.Item1.X, childGroupMinMax.Item2.X));
-                    max.Y = MathF.Max(max.Y, MathF.Max(childGroupMinMax.Item1.Y, childGroupMinMax.Item2.Y));
-
-                    continue;
-                }
-
-                if (child.Position.X < min.X)
-                {
-                    min.X = child.Position.X;
-                }
-
-                if (child.Position.Y < min.Y)
-                {
-                    min.Y = child.Position.Y;
-                }
-
-                if (child.GetMaxX() > max.X)
-                {
-                    max.X = child.GetMaxX();
-                }
-
-                if (child.GetMaxY() > max.Y)
-                {
-                    max.Y = child.GetMaxY();
-                }
-            }
-
-            return new ValueTuple<Vec2f, Vec2f>(min, max);
-        }
-    }*/
 }

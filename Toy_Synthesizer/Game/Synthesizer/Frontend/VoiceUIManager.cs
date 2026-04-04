@@ -39,7 +39,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             string xml = @"
 <Layout>
 
-    <Window Title=""Voices"" X=""50"" Y=""50"" W=""400"" H=""600"">
+    <Window Title=""Voices"" X=""50"" Y=""50"" W=""25%"" H=""60%"">
 
         <ScrollPane X=""0%"" Y=""0%"" W=""100%"" H=""95%""/>
 

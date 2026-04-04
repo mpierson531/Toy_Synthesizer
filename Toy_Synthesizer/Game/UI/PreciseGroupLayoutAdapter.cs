@@ -4,12 +4,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using FontStashSharp;
+
 using GeoLib;
-using GeoLib.GeoMaths;
-using GeoLib.GeoShapes;
 using GeoLib.GeoGraphics;
 using GeoLib.GeoGraphics.UI;
 using GeoLib.GeoGraphics.UI.Widgets;
+using GeoLib.GeoMaths;
+using GeoLib.GeoShapes;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
@@ -243,24 +245,29 @@ namespace Toy_Synthesizer.Game.UI
 
                 Layout(group, state);
             }
-        }
 
-        public ReadOnlySpan<WidgetState> GetWidgetStates()
-        {
-            return layoutState.ToReadonlySpan();
+            if (group is ScrollPane s)
+            {
+                // TODO: Improve (in ScrollPane in engine or here)
+
+                // Not a great solution
+                // The problem is that the scrollpane will layout,
+                // triggering this to layout, *after*,
+                // meaning the scrollpane will not set scrolling parameters based the new bounds of its children but the old bounds.
+                // This brute forces it but probably isn't very efficient.
+
+                s.LayoutScrolling();
+            }
         }
 
         private void Layout(GroupWidget group, WidgetState state)
         {
             AABB absoluteBounds = GetAbsoluteBounds(group, state);
 
-            if (group is ScrollPane scrollPane)
-            {
-                absoluteBounds.Position += scrollPane.CurrentOffset;
-            }
-
             if (IsPositioningEnabled)
             {
+                CheckIfNeedsScrollPaneOffset(group, ref absoluteBounds, areBoundsNormalized: false, addOffset: false);
+
                 state.widget.Position = absoluteBounds.Position;
             }
 
@@ -268,6 +275,11 @@ namespace Toy_Synthesizer.Game.UI
             {
                 state.widget.Size = absoluteBounds.Size;
             }
+        }
+
+        public ReadOnlySpan<WidgetState> GetWidgetStates()
+        {
+            return layoutState.ToReadonlySpan();
         }
 
         public static AABB GetAbsoluteBounds(GroupWidget group, WidgetState state)
@@ -299,27 +311,47 @@ namespace Toy_Synthesizer.Game.UI
 
         public static AABB GetNormalizedBounds(GroupWidget group, Widget child)
         {
-            AABB bounds = GetNormalizedBounds(group.GetBoundsAABB(), child);
-
-            return bounds;
+            return GetNormalizedBounds(group, child.GetBoundsAABB());
         }
 
-        public static AABB GetNormalizedBounds(AABB baseBounds, Widget child)
-        {
-            AABB bounds = GetNormalizedBounds(baseBounds, child.GetBoundsAABB());
-
-            return bounds;
-        }
-
-        public static AABB GetNormalizedBounds(AABB baseBounds, AABB childBounds)
+        public static AABB GetNormalizedBounds(GroupWidget group, AABB childBounds)
         {
             AABB bounds = new AABB
             {
-                Position = Vec2f.DivideOrZero((childBounds.Position - baseBounds.Position), baseBounds.Size),
-                Size = Vec2f.DivideOrZero(childBounds.Size, baseBounds.Size)
+                Position = Vec2f.DivideOrZero(childBounds.Position - group.Position, group.Size),
+                Size = Vec2f.DivideOrZero(childBounds.Size, group.Size)
             };
 
+            CheckIfNeedsScrollPaneOffset(group, ref bounds, areBoundsNormalized: true, addOffset: true);
+
             return bounds;
+        }
+
+        // If group is a ScrollPane, subtracts its current offset from bounds by default. 
+        // If addOffset is true, adds the offset instead.
+        private static void CheckIfNeedsScrollPaneOffset(GroupWidget group, ref AABB bounds, bool areBoundsNormalized, 
+                                                         bool addOffset = false)
+        {
+            if (group is ScrollPane scrollPaneGroup)
+            {
+                Vec2f scrollPaneOffset = scrollPaneGroup.CurrentOffset;
+
+                if (addOffset)
+                {
+                    scrollPaneOffset = -scrollPaneOffset;
+                }
+
+                if (areBoundsNormalized)
+                {
+                    Vec2f normalizedScrollPaneOffset = scrollPaneOffset / scrollPaneGroup.Size;
+
+                    bounds.Position += new Vec2f(normalizedScrollPaneOffset.X, normalizedScrollPaneOffset.Y);
+                }
+                else
+                {
+                    bounds.Position += new Vec2f(scrollPaneOffset.X, scrollPaneOffset.Y);
+                }
+            }
         }
 
         public class WidgetState

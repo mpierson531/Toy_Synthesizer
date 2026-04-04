@@ -11,9 +11,7 @@ using GeoLib.GeoShapes;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
-using SharpDX.DXGI;
-
-using static GeoLib.GeoGraphics.UI.Widgets.GroupWidget;
+using Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets;
 
 namespace Toy_Synthesizer.Game.UI
 {
@@ -51,8 +49,6 @@ namespace Toy_Synthesizer.Game.UI
         public RetreatFunction RetreatMode { get; set; }
 
         private bool settingSizeInternally;
-        private bool layingOutInternally;
-        private bool settingSizeFromSizeChanged;
 
         private bool parentResize_IsLayoutEnabled;
 
@@ -67,6 +63,8 @@ namespace Toy_Synthesizer.Game.UI
         // For remembering states and correct layouts.
         private CompactBoolList childExpandablesExpanded;
 
+        private LayoutOrientation currentExpansionDirection;
+
         private Button coverButton;
 
         public Button CoverButton
@@ -77,6 +75,11 @@ namespace Toy_Synthesizer.Game.UI
         public bool IsExpanded
         {
             get => isExpanded;
+        }
+
+        public Vec2f PreExpansionSize
+        {
+            get => preExpansionSize;
         }
 
         public float ShowDuration { get; set; }
@@ -108,6 +111,7 @@ namespace Toy_Synthesizer.Game.UI
                 direction = value;
 
                 LayoutChildren(animate: false);
+
                 Layout();
             }
         }
@@ -182,22 +186,22 @@ namespace Toy_Synthesizer.Game.UI
 
             this.parentResize_IsLayoutEnabled = false;
 
+            OnChildAddedEnd += ChildAddedEnd;
+
             layoutAdapter = new PreciseGroupLayoutAdapter();
             layoutAdapter.Disable();
 
             Adapters.Add(layoutAdapter);
 
             postExpansionAction = new DelayedAction(PostExpansionAction, 0f);
-            //postExpansionAction = new DelayedAction(layoutAdapter.Enable, 0f);
 
             settingSizeInternally = false;
-            settingSizeFromSizeChanged = false;
 
             this.coverButton = coverButton;
 
             childExpandablesExpanded = new CompactBoolList(IsEmpty ? 100 : Count);
 
-            AddChild(this.coverButton);
+            AddChild(CoverButton);
 
             if (children is not null)
             {
@@ -206,15 +210,15 @@ namespace Toy_Synthesizer.Game.UI
 
             AddCoverButtonListener();
 
-            //CollapseInternal(animate: false);
+            CollapseInternal(animate: false);
 
             layoutAdapter.Enable();
         }
 
         private void AddCoverButtonListener()
         {
-            coverButton.OnCheck += CoverButton_OnCheck;
-            coverButton.OnUncheck += CoverButton_OnUncheck;
+            CoverButton.OnCheck += CoverButton_OnCheck;
+            CoverButton.OnUncheck += CoverButton_OnUncheck;
         }
 
         private void CoverButton_OnCheck()
@@ -226,29 +230,6 @@ namespace Toy_Synthesizer.Game.UI
         {
             CollapseInternal(animate: false);
         }
-
-        /*private void LayoutParent(float moveAmount)
-        {
-            if (Parent is null || Parent.Count <= 1) return;
-
-            int thisIndex = Parent.IndexOf(this);
-            if (thisIndex < 0 || thisIndex == 0) return;
-
-            Vec2f fullMoveAmount = GetDirectionScalars() * moveAmount;
-
-            for (int index = thisIndex + 1; index < Parent.Count; index++)
-            {
-                Widget sibling = Parent[index];
-
-                MoveChildTo(sibling, sibling.Position + fullMoveAmount,
-                            setVisibility: false,
-                            animate: true,
-                            animateWithInterpolation: false);
-            }
-
-            layingOutInternally = true;
-            Parent.Layout();
-        }*/
 
         // NEEDS IMPROVED
         private void LayoutParent(Vec2f moveAmount)
@@ -286,7 +267,7 @@ namespace Toy_Synthesizer.Game.UI
                                 Size = state.widget.Size
                             };
 
-                            AABB newParentChildNormalizedBounds = PreciseGroupLayoutAdapter.GetNormalizedBounds(Parent.GetBoundsAABB(), newParentChildAbsoluteBounds);
+                            AABB newParentChildNormalizedBounds = PreciseGroupLayoutAdapter.GetNormalizedBounds(Parent, newParentChildAbsoluteBounds);
 
                             parentLayoutAdapter.TrySetNormalizedBounds(state.widget, newParentChildNormalizedBounds);
                         }
@@ -350,7 +331,7 @@ namespace Toy_Synthesizer.Game.UI
                 siblingMoveAmount.X = moveAmount.X;
             }
 
-            if (moveAmount.Y != 0f && sibling.Position.Y >= Position.Y)
+            if (moveAmount.Y != 0f && sibling.Position.Y > Position.Y)
             {
                 siblingMoveAmount.Y = moveAmount.Y;
             }
@@ -377,7 +358,7 @@ namespace Toy_Synthesizer.Game.UI
             return true;
         }
 
-        private bool TrySetCurrentParentPreciseLayoutAdapterBounds()
+        private bool TrySetCurrentParentPreciseLayoutAdapterBounds(bool setThisBoundsPrevious = true)
         {
             if (!TryGetParentPreciseLayoutAdapter(out PreciseGroupLayoutAdapter parentAdapter))
             {
@@ -386,7 +367,10 @@ namespace Toy_Synthesizer.Game.UI
 
             parentAdapter.TryGetNormalizedBounds(this, out AABB previousBounds);
 
-            this.previousParentPreciseLayoutAdapterBounds_This = previousBounds;
+            if (setThisBoundsPrevious)
+            {
+                this.previousParentPreciseLayoutAdapterBounds_This = previousBounds;
+            }
 
             AABB currentBounds = PreciseGroupLayoutAdapter.GetNormalizedBounds(Parent, this);
 
@@ -468,7 +452,7 @@ namespace Toy_Synthesizer.Game.UI
                 return;
             }
 
-            coverButton.Check();
+            CoverButton.Check();
         }
 
         public void Collapse()
@@ -478,10 +462,10 @@ namespace Toy_Synthesizer.Game.UI
                 return;
             }
 
-            coverButton.Uncheck();
+            CoverButton.Uncheck();
         }
 
-        // Animate controls whether or not animations should be done.
+        // animate controls whether or not animations should be done.
         // It is purely for bookkeeping/state synchronization, where animations are probably undesirable.
         private void ExpandInternal(bool animate)
         {
@@ -490,9 +474,9 @@ namespace Toy_Synthesizer.Game.UI
             SetDrawerItemsVisible(animate);
         }
 
-        // Animate controls whether or not animations should be done.
+        // animate controls whether or not animations should be done.
         // It is purely for bookkeeping/state synchronization, where animations are probably undesirable.
-        public void CollapseInternal(bool animate)
+        private void CollapseInternal(bool animate)
         {
             isExpanded = false;
 
@@ -508,13 +492,13 @@ namespace Toy_Synthesizer.Game.UI
             SetDrawerItemsVisible(animate);
         }
 
-        // Animate controls whether or not animations should be done.
+        // animate controls whether or not animations should be done.
         // It is purely for bookkeeping/state synchronization, where animations are probably undesirable.
         private void SetDrawerItemsVisible(bool animate)
         {
             DisableLayoutAdapterAndAddPostExpansionAction();
 
-            Vec2f targetSize = !IsExpanded ? preExpansionSize : GetTargetExpansionSize();
+            Vec2f targetSize = !IsExpanded ? preExpansionSize : GetTargetExpansionSize(GetMax());
 
             Vec2f startingSize = Size;
 
@@ -530,9 +514,9 @@ namespace Toy_Synthesizer.Game.UI
             {
                 moveAmount = direction * (targetSize - Size);
 
-                normalizedMovedAmount = moveAmount / Size;
+                normalizedMovedAmount = moveAmount / startingSize;
 
-                preExpansionSize = Size;
+                preExpansionSize = startingSize;
             }
             else
             {
@@ -560,6 +544,13 @@ namespace Toy_Synthesizer.Game.UI
             {
                 SizeParentBy(moveAmount, animate);
             }
+
+            SetCoverButtonPosition();
+        }
+
+        private void SetCoverButtonPosition()
+        {
+            CoverButton.Position = PreciseGroupLayoutAdapter.GetAbsoluteBounds(this, layoutAdapter.GetWidgetStates()[0]).Position;
         }
 
         private void SetChildrenVisibility()
@@ -570,13 +561,18 @@ namespace Toy_Synthesizer.Game.UI
             }
         }
 
-        private Vec2f GetTargetExpansionSize()
+        private Vec2f GetTargetExpansionSize(Vec2f startMax)
         {
             Utils.Assert(IsExpanded);
 
+            if (Count <= 1)
+            {
+                return preExpansionSize;
+            }
+
             ReadOnlySpan<PreciseGroupLayoutAdapter.WidgetState> layoutStates = layoutAdapter.GetWidgetStates();
 
-            Vec2f max = GetMax();
+            Vec2f max = startMax;
 
             for (int index = DRAWER_CONTENT_BEGIN_INDEX; index < layoutStates.Length; index++)
             {
@@ -630,48 +626,6 @@ namespace Toy_Synthesizer.Game.UI
             }
         }
 
-        /*private void SetLayoutAdapterChildBounds()
-        {
-            if (Count <= 1)
-            {
-                return;
-            }
-
-            AABB baseBounds = new AABB
-            {
-                Position = Position,
-                Size = IsExpanded ? preExpansionSize : Size
-            };
-
-            for (int index = 0; index < Count; index++)
-            {
-                Widget child = GetUnchecked(index);
-
-                AABB bounds = PreciseGroupLayoutAdapter.GetNormalizedBounds(baseBounds, child);
-
-                layoutAdapter.TrySetNormalizedBounds(child, bounds);
-            }
-        }*/
-
-        /*private void SetLayoutAdapterChildBounds(Widget child, Vec2f targetPosition)
-        {
-            AABB baseBounds = new AABB
-            {
-                Position = Position,
-                Size = IsExpanded ? preExpansionSize : Size
-            };
-
-            AABB childBaseBounds = new AABB
-            {
-                Position = targetPosition,
-                Size = child.Size
-            };
-
-            AABB childBounds = PreciseGroupLayoutAdapter.GetNormalizedBounds(baseBounds, childBaseBounds);
-
-            layoutAdapter.TrySetNormalizedBounds(child, childBounds);
-        }*/
-
         //baseSize is only used if IsExpanded is true.
         private void LayoutChildren(bool animate, Vec2f? baseSize = null)
         {
@@ -685,7 +639,7 @@ namespace Toy_Synthesizer.Game.UI
                     Size = baseSize ?? Size
                 };
 
-                for (int index = DRAWER_CONTENT_BEGIN_INDEX; index < Count; index++)
+                for (int index = DRAWER_CONTENT_BEGIN_INDEX; index < Count && index < layoutStates.Length; index++)
                 {
                     Widget child = GetUnchecked(index);
 
@@ -711,7 +665,7 @@ namespace Toy_Synthesizer.Game.UI
                     Size = preExpansionSize
                 };
 
-                for (int index = DRAWER_CONTENT_BEGIN_INDEX; index < Count; index++)
+                for (int index = DRAWER_CONTENT_BEGIN_INDEX; index < Count && index < layoutStates.Length; index++)
                 {
                     Widget child = GetUnchecked(index);
 
@@ -894,36 +848,15 @@ namespace Toy_Synthesizer.Game.UI
             }
         }
 
-        /*protected override void LayoutInternal(GroupWidget.LayoutArgs layoutArgs)
-        {
-            base.LayoutInternal(layoutArgs);
-
-            if (layingOutInternally) // Should only be hit when manually laying out Parent.
-            {
-                layingOutInternally = false;
-
-                return;
-            }
-
-            LayoutArgs parentLayoutArgs = LayoutArgs.Create(Parent, this);
-
-            Parent?.Layout(parentLayoutArgs);
-        }*/
-
         private void PostExpansionAction()
         {
-            if (layingOutInternally) // Should only be hit when manually laying out Parent.
-            {
-                layingOutInternally = false;
-
-                return;
-            }
-
             LayoutArgs parentLayoutArgs = LayoutArgs.Create(Parent, this);
 
             Parent?.Layout(parentLayoutArgs);
 
             layoutAdapter.Enable();
+
+            Layout();
         }
 
         protected override void SizeChanged(ref Vec2f previousSize, ref Vec2f newSize)
@@ -936,26 +869,9 @@ namespace Toy_Synthesizer.Game.UI
                 return;
             }
 
-            if (IsExpanded)
-            {
-                preExpansionSize *= newSize / previousSize;
-            }
-
-            // If not empty, then the child sizes will be changed, which will trigger ChildSizeChanged,
-            // which will need to not do any work, which would cause a stack overflow.
-            if (!IsEmpty)
-            {
-                settingSizeFromSizeChanged = true;
-            }
-
-            // Else, set settingSizeInternally to true, so that if/when children are resized by base.SizeChanged, it doesn't also trigger resizes in this widget.
+            preExpansionSize *= newSize / previousSize;
 
             base.SizeChanged(ref previousSize, ref newSize);
-
-            if (!IsEmpty)
-            {
-                settingSizeFromSizeChanged = false;
-            }
         }
 
         protected override void ChildrenChanged(bool endOfRange)
@@ -970,14 +886,10 @@ namespace Toy_Synthesizer.Game.UI
             }
         }
 
-        protected override void ChildAdded(Widget child, int index)
+        protected void ChildAddedEnd(GroupWidget _, Widget child)
         {
-            base.ChildAdded(child, index);
-
-            if (child != coverButton)
+            if (child != CoverButton)
             {
-                //child.OnResize += ChildSizeChanged;
-
                 if (child is IExpandable expandable)
                 {
                     childExpandablesExpanded.Add(expandable.IsExpanded);
@@ -991,36 +903,68 @@ namespace Toy_Synthesizer.Game.UI
             {
                 childExpandablesExpanded.Add(false);
             }
+
+            Layout_ChildAddedOrRemoved();
         }
 
         protected override void ChildRemoved(Widget child, int index)
         {
             base.ChildRemoved(child, index);
 
-            /*if (child != coverButton)
-            {
-                child.OnResize -= ChildSizeChanged;
-            }*/
-
             childExpandablesExpanded.RemoveAt(index);
+
+            Layout_ChildAddedOrRemoved();
         }
 
-        /*private void ChildSizeChanged(Vec2f previousSize, Vec2f newSize)
+        private void Layout_ChildAddedOrRemoved()
         {
-            if (settingSizeFromSizeChanged)
+            if (!IsExpanded)
             {
                 return;
             }
 
-            if (settingSizeInternally)
+            if (Count <= 1)
             {
-                settingSizeInternally = false;
+                Collapse();
 
                 return;
             }
 
-            SetSizeInternally(Size + (newSize - previousSize));
-        }*/
+            Vec2f targetExpansionSize = GetTargetExpansionSize(Position + preExpansionSize);
+
+            if (GeoMath.Equals_Precise(targetExpansionSize.X, Size.X) && GeoMath.Equals_Precise(targetExpansionSize.Y, Size.Y))
+            {
+                return;
+            }
+
+            //DisableLayoutAdapterAndAddPostExpansionAction();
+
+            Vec2f startingSize = Size;
+            RescaleAdapterNormalizedBounds(startingSize, targetExpansionSize);
+
+            Vec2f directionScalars = GetDirectionScalars();
+
+            Vec2f moveDelta = directionScalars * (targetExpansionSize - startingSize);
+
+            Vec2f totalMoveAmount = directionScalars * (targetExpansionSize - preExpansionSize);
+
+            normalizedMovedAmount = totalMoveAmount / preExpansionSize;
+
+            LayoutChildren(animate: false, baseSize: targetExpansionSize);
+
+            SetSizeInternally(targetExpansionSize);
+
+            TrySetCurrentParentPreciseLayoutAdapterBounds(setThisBoundsPrevious: false);
+
+            LayoutParent(moveDelta);
+
+            if (ResizeParent)
+            {
+                SizeParentBy(moveDelta, animate: false);
+            }
+
+            SetCoverButtonPosition();
+        }
 
         private SizeByAction InitResizeParentAction()
         {
