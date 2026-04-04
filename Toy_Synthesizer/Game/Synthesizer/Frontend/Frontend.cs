@@ -18,13 +18,6 @@ using GeoLib.GeoUtils.Collections;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 
-using Toy_Synthesizer.Game.DigitalSignalProcessing;
-using Toy_Synthesizer.Game.Data;
-using Toy_Synthesizer.Game.Data.Generic;
-using Toy_Synthesizer.Game.Midi;
-using Toy_Synthesizer.Game.Synthesizer.Backend;
-using Toy_Synthesizer.Game.DigitalSignalProcessing.BuiltinAudioEffects;
-using Toy_Synthesizer.Game.Synthesizer.Frontend.Console;
 using Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets;
 using Toy_Synthesizer.Game.UI;
 
@@ -33,84 +26,18 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
     // TODO: Implement adding/removing voices and oscillators.
     public class Frontend
     {
-        public const double DEFAULT_SHIFT_SEMITONE_AMOUNT = 12.0;
-        public const double DEFAULT_CONTROL_SEMITONE_AMOUNT = -12.0;
-        public static readonly NumberRange<double> ShiftAndControlSemitoneRange;
-        private static readonly Dictionary<Keys, ImmutableArray<Voice>> defaultKeyVoiceBindings;
-
-        static Frontend()
-        {
-            ShiftAndControlSemitoneRange = NumberRange<double>.From(-24.0, 24.0);
-
-            defaultKeyVoiceBindings = GetDefaultKeyVoiceBindings();
-        }
-
         private readonly UIXmlParser uiXmlParser;
 
-        private readonly VoiceUIManager voiceUIManager;
+        private readonly VoiceFrontend voiceFrontend;
 
         private readonly Game game;
 
-        private readonly Dictionary<Keys, Voice[]> keyVoiceBindings;
-
-        private readonly ViewableList<Property<Voice>> voiceProperties;
-
         private readonly Console.Console console;
 
-        private double shiftSemitoneAmount;
-        private double controlSemitoneAmount;
-
-        private double? currentShiftShiftedSemitoneAmount;
-        private double? currentControlShiftedSemitoneAmount;
-
-        public double ShiftSemitoneAmount
+        public VoiceFrontend VoiceFrontend
         {
-            get => shiftSemitoneAmount;
-
-            set
-            {
-                value = ShiftAndControlSemitoneRange.Clamp(value);
-
-                double delta = value - shiftSemitoneAmount;
-
-                shiftSemitoneAmount = value;
-
-                if (currentShiftShiftedSemitoneAmount.HasValue)
-                {
-                    game.Synthesizer.GlobalVoicePitchShiftSemitones += delta;
-
-                    currentShiftShiftedSemitoneAmount += delta;
-                }
-
-                OnShiftSemitoneAmountChanged?.Invoke(shiftSemitoneAmount);
-            }
+            get => voiceFrontend;
         }
-
-        public double ControlSemitoneAmount
-        {
-            get => controlSemitoneAmount;
-
-            set
-            {
-                value = ShiftAndControlSemitoneRange.Clamp(value);
-
-                double delta = value - controlSemitoneAmount;
-
-                controlSemitoneAmount = value;
-
-                if (currentControlShiftedSemitoneAmount.HasValue)
-                {
-                    game.Synthesizer.GlobalVoicePitchShiftSemitones += delta;
-
-                    currentControlShiftedSemitoneAmount += delta;
-                }
-
-                OnControlSemitoneAmountChanged?.Invoke(controlSemitoneAmount);
-            }
-        }
-
-        public Action<double> OnShiftSemitoneAmountChanged;
-        public Action<double> OnControlSemitoneAmountChanged;
 
         public Frontend(Game game)
         {
@@ -118,53 +45,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             uiXmlParser = new UIXmlParser(game.UIManager);
 
-            voiceUIManager = new VoiceUIManager(game, uiXmlParser);
-
-            currentShiftShiftedSemitoneAmount = null;
-            currentControlShiftedSemitoneAmount = null;
-
-            ShiftSemitoneAmount = DEFAULT_SHIFT_SEMITONE_AMOUNT;
-            ControlSemitoneAmount = DEFAULT_CONTROL_SEMITONE_AMOUNT;
+            voiceFrontend = new VoiceFrontend(game, uiXmlParser);
 
             AddUIParserTypeFactories();
             AddUIManagerStyles();
-
-            keyVoiceBindings = new Dictionary<Keys, Voice[]>(defaultKeyVoiceBindings.Count);
-
-            foreach (KeyValuePair<Keys, ImmutableArray<Voice>> binding in defaultKeyVoiceBindings)
-            {
-                Voice[] voicesCopy = binding.Value.ToArray(voice => voice.Copy(deepCopy: true));
-
-                keyVoiceBindings.Add(binding.Key, voicesCopy);
-            }
-
-            foreach (Voice[] voices in keyVoiceBindings.Values)
-            {
-                for (int index = 0; index < voices.Length; index++)
-                {
-                    voices[index].LPF = new StateVariableLPF(20000, 0.25, game.Synthesizer.SampleRate);
-                }
-
-                for (int index = 0; index < voices.Length; index++)
-                {
-                    AudioSourceCommand addVoiceCommand = SynthesizerCommands.AddVoice(voices[index]);
-
-                    game.Synthesizer.SendCommand(ref addVoiceCommand);
-                }
-            }
-
-            // Distribute the oscillator amplitudes equally, to ensure a decent volume.
-            AudioSourceCommand forEachVoiceCommand = SynthesizerCommands.ForEachVoiceAction(delegate (Voice voice)
-            {
-                if (voice.Oscillators.Count > 1)
-                {
-                    voice.Oscillators.ForEach(oscillator => oscillator.Amplitude /= voice.Oscillators.Count);
-                }
-            });
-
-            game.Synthesizer.SendCommand(ref forEachVoiceCommand);
-
-            voiceProperties = new ViewableList<Property<Voice>>();
 
             console = new Console.Console(game);
 
@@ -179,7 +63,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             InitShiftAndControlKeyShiftUI();
             InitRecordingUI();
 
-            voiceUIManager.InitUI();
+            voiceFrontend.InitUI();
 
             InitConsole();
         }
@@ -254,49 +138,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             game.AddUIWidgets(widgets);
         }
 
-        public void AddVoiceToExistingKeyBinding(Keys key, Voice voice)
-        {
-            AddVoicesToExistingKeyBinding(key, new Voice[] { voice });
-        }
-
-        public void AddVoicesToExistingKeyBinding(Keys key, Voice[] voices)
-        {
-            if (!keyVoiceBindings.TryGetValue(key, out Voice[] existingVoices))
-            {
-                throw new InvalidOperationException($"No binding for key \"{key}\" exists.");
-            }
-
-            keyVoiceBindings.Remove(key);
-
-            Voice[] allVoices = ArrayUtils.Concatenate(voices, existingVoices);
-
-            keyVoiceBindings.Add(key, allVoices);
-
-            for (int index = 0; index < voices.Length; index++)
-            {
-                AudioSourceCommand addVoiceCommand = SynthesizerCommands.AddVoice(voices[index]);
-
-                game.DSP.SendAudioSourceCommand(game.Synthesizer, addVoiceCommand);
-            }
-        }
-
-        public void AddVoiceKeyBinding(Keys key, Voice voice)
-        {
-            AddVoicesKeyBinding(key, new Voice[] { voice });
-        }
-
-        public void AddVoicesKeyBinding(Keys key, Voice[] voices)
-        {
-            keyVoiceBindings.Add(key, voices);
-
-            for (int index = 0; index < voices.Length; index++)
-            {
-                AudioSourceCommand addVoiceCommand = SynthesizerCommands.AddVoice(voices[index]);
-
-                game.DSP.SendAudioSourceCommand(game.Synthesizer, addVoiceCommand);
-            }
-        }
-
         private void InitConsole()
         {
             console.Init();
@@ -313,72 +154,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
                 return true;
             }
 
-            if (!isRepeat && keyVoiceBindings.TryGetValue(key, out Voice[] voices))
-            {
-                for (int index = 0; index < voices.Length; index++)
-                {
-                    AudioSourceCommand voiceOnCommand = SynthesizerCommands.VoiceOn(voices[index]);
-
-                    game.DSP.SendAudioSourceCommand(game.Synthesizer, voiceOnCommand);
-                }
-
-                return true;
-            }
-
-            if (!isRepeat && (key == Keys.LeftShift || key == Keys.RightShift) && !currentShiftShiftedSemitoneAmount.HasValue)
-            {
-                currentShiftShiftedSemitoneAmount = ShiftSemitoneAmount;
-
-                game.Synthesizer.GlobalVoicePitchShiftSemitones += ShiftSemitoneAmount;
-
-                return true;
-            }
-
-            if (!isRepeat && (key == Keys.LeftControl || key == Keys.RightControl) && !currentControlShiftedSemitoneAmount.HasValue)
-            {
-                currentControlShiftedSemitoneAmount = ControlSemitoneAmount;
-
-                game.Synthesizer.GlobalVoicePitchShiftSemitones += ControlSemitoneAmount;
-
-                return true;
-            }
-
-            return false;
+            return voiceFrontend.KeyDown(key, isRepeat, holdTime);
         }
 
         public bool KeyUp(Keys key)
         {
-            if (keyVoiceBindings.TryGetValue(key, out Voice[] voices))
-            {
-                for (int index = 0; index < voices.Length; index++)
-                {
-                    AudioSourceCommand voiceOffCommand = SynthesizerCommands.VoiceOff(voices[index]);
-
-                    game.DSP.SendAudioSourceCommand(game.Synthesizer, voiceOffCommand);
-                }
-            }
-
-            if (key == Keys.LeftShift && !game.Geo.Input.keyboard.IsKeyDown(Keys.RightShift) 
-                || key == Keys.RightShift && !game.Geo.Input.keyboard.IsKeyDown(Keys.LeftShift))
-            {
-                game.Synthesizer.GlobalVoicePitchShiftSemitones -= currentShiftShiftedSemitoneAmount.Value;
-
-                currentShiftShiftedSemitoneAmount = null;
-
-                return true;
-            }
-
-            if (key == Keys.LeftControl && !game.Geo.Input.keyboard.IsKeyDown(Keys.RightControl)
-                || key == Keys.RightControl && !game.Geo.Input.keyboard.IsKeyDown(Keys.LeftControl))
-            {
-                game.Synthesizer.GlobalVoicePitchShiftSemitones -= currentControlShiftedSemitoneAmount.Value;
-
-                currentControlShiftedSemitoneAmount = null;
-
-                return true;
-            }
-
-            return false;
+            return voiceFrontend.KeyUp(key);
         }
 
         public bool MouseDown(float x, float y, MouseStates.Button button)
@@ -430,97 +211,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         {
             console.WindowResized(width, height);
         }
-
-        private static Dictionary<Keys, ImmutableArray<Voice>> GetDefaultKeyVoiceBindings()
-        {
-            MidiNote startNote = MidiNote.C4;
-
-            int[] semitoneOffsets = { 0, 2, 4, 5, 7, 9, 11 }; // C, D, E, F, G, A, B
-
-            int startOctave = MidiUtils.GetOctave(startNote);
-            int additionalLayerCount = 0;
-
-            ViewableList<ValueTuple<Keys, ImmutableArray<Voice>>> voices = new ViewableList<ValueTuple<Keys, ImmutableArray<Voice>>>();
-
-            foreach (int offset in semitoneOffsets)
-            {
-                Keys key = offset switch
-                {
-                    0 => Keys.C,
-                    2 => Keys.D,
-                    4 => Keys.E,
-                    5 => Keys.F,
-                    7 => Keys.G,
-                    9 => Keys.A,
-                    11 => Keys.B,
-
-                    _ => throw new Exception("Bad semitone offset. This should never be reached!")
-                };
-
-                ViewableList<Voice> voiceList = new ViewableList<Voice>();
-
-                for (int octaveLayer = startOctave; octaveLayer < startOctave + 1 + additionalLayerCount; octaveLayer++)
-                {
-                    int noteValue = (octaveLayer + 1) * 12 + offset;
-
-                    MidiNote midiNote = (MidiNote)noteValue;
-
-                    voiceList.Add(Voice.FromMidi(midiNote));
-                }
-
-                ValueTuple<Keys, ImmutableArray<Voice>> binding = (key, new ImmutableArray<Voice>(voiceList.ToArray()));
-
-                voices.Add(binding);
-            }
-
-            return voices.ToDictionary(x => x.Item1, x => x.Item2);
-
-            /*Voice a3 = Voice.FromMidi(MidiNote.A3);
-
-            Voice a4 = Voice.FromMidi(MidiNote.A4);
-
-            Voice b3 = Voice.FromMidi(MidiNote.B3);
-
-            Voice b4 = Voice.FromMidi(MidiNote.B4);
-
-            Voice c3 = Voice.FromMidi(MidiNote.C3);
-
-            Voice c4 = Voice.FromMidi(MidiNote.C4);
-
-            Voice d3 = Voice.FromMidi(MidiNote.D3);
-
-            Voice d4 = Voice.FromMidi(MidiNote.D4);
-
-            Voice e3 = Voice.FromMidi(MidiNote.E3);
-
-            Voice e4 = Voice.FromMidi(MidiNote.E4);
-
-            Voice f3 = Voice.FromMidi(MidiNote.F3);
-
-            Voice f4 = Voice.FromMidi(MidiNote.F4);
-
-            Voice g3 = Voice.FromMidi(MidiNote.G3);
-
-            Voice g4 = Voice.FromMidi(MidiNote.G4);
-
-            return new Dictionary<Keys, Voice[]>
-            {
-                { Keys.A, new Voice[] { a3, a4 } },
-
-                { Keys.B, new Voice[] { b3, b4 } },
-
-                { Keys.C, new Voice[] { c3, c4 } },
-
-                { Keys.D, new Voice[] { d3, d4 } },
-
-                { Keys.E, new Voice[] { e3, e4 } },
-
-                { Keys.F, new Voice[] { f3, f4 } },
-
-                { Keys.G, new Voice[] { g3, g4 } }
-            };*/
-        }
-
         private void AddUIParserTypeFactories()
         {
             uiXmlParser.AddTypeFactory(new SliderDisplayWidgetFactory());

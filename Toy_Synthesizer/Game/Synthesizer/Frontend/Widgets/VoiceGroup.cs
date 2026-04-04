@@ -230,7 +230,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void AddOscillatorButton_OnClick()
         {
-            // TODO: Add animated/velocity-based scrolling to the position of the new oscillator widget
+            // TODO: Add animation/velocity-based scrolling to the position of the new oscillator widget
 
             Oscillator oscillator = PolyphonicSynthesizer.CreateDefaultOscillator(Voice.CenterFrequency);
 

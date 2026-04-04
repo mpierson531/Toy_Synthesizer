@@ -75,14 +75,14 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             settingShiftAmount = true;
 
-            frontend.ShiftSemitoneAmount = value;
+            frontend.VoiceFrontend.ShiftSemitoneAmount = value;
         }
 
         private void SetControlRaw(double value)
         {
             settingControlAmount = true;
 
-            frontend.ControlSemitoneAmount = value;
+            frontend.VoiceFrontend.ControlSemitoneAmount = value;
         }
 
         private string GetUIXml()
@@ -94,9 +94,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                 <SliderDisplayWidget
                  Position=""(0%, 0%)""
                  Size=""(100%, 50%)""
-                 NumberMinValue=""{Frontend.ShiftAndControlSemitoneRange.Min}""
-                 NumberMaxValue=""{Frontend.ShiftAndControlSemitoneRange.Max}""
-                 NumberDefaultValue=""{Frontend.DEFAULT_SHIFT_SEMITONE_AMOUNT}""
+                 NumberMinValue=""{VoiceFrontend.ShiftAndControlSemitoneRange.Min}""
+                 NumberMaxValue=""{VoiceFrontend.ShiftAndControlSemitoneRange.Max}""
+                 NumberDefaultValue=""{VoiceFrontend.DEFAULT_SHIFT_SEMITONE_AMOUNT}""
                  DragIncrement=""1.0""
                  PropertyName=""Shift Key Amount""
                  LabelPosition=""(5%, 5%)""
@@ -114,9 +114,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                 <SliderDisplayWidget
                  Position=""(0%, 50%)""
                  Size=""(100%, 50%)""
-                 NumberMinValue=""{Frontend.ShiftAndControlSemitoneRange.Min}""
-                 NumberMaxValue=""{Frontend.ShiftAndControlSemitoneRange.Max}""
-                 NumberDefaultValue=""{Frontend.DEFAULT_CONTROL_SEMITONE_AMOUNT}""
+                 NumberMinValue=""{VoiceFrontend.ShiftAndControlSemitoneRange.Min}""
+                 NumberMaxValue=""{VoiceFrontend.ShiftAndControlSemitoneRange.Max}""
+                 NumberDefaultValue=""{VoiceFrontend.DEFAULT_CONTROL_SEMITONE_AMOUNT}""
                  DragIncrement=""1.0""
                  PropertyName=""Control Key Amount""
                  LabelPosition=""(5%, 5%)""
