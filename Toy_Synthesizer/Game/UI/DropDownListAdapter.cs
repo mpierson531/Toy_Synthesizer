@@ -83,11 +83,12 @@ namespace Toy_Synthesizer.Game.UI
                                Func<string, int, Vec2f, Vec2f, Button> childProvider,
                                Func<Vec2f, Vec2f, GroupWidget> groupProvider,
                                Vec2fValue dropDownPosition,
-                               Vec2fValue? dropDownMaxSize,
+                               FloatValue? dropDownWidth,
+                               FloatValue? dropDownMaxHeight,
+                               FloatValue? dropDownHeightPadding,
                                Vec2fValue buttonStartPosition,
                                Vec2fValue buttonSize,
                                Vec2fValue buttonSpacing,
-                               Vec2fValue? additionalDropDownSize,
                                ViewableList<object> values, int defaultIndex,
                                ToStringConverter toStringProvider)
             : base(group: group,
@@ -97,11 +98,12 @@ namespace Toy_Synthesizer.Game.UI
                    childProvider: childProvider,
                    groupProvider: groupProvider,
                    dropDownPosition: dropDownPosition,
-                   dropDownMaxSize: dropDownMaxSize,
+                   dropDownWidth: dropDownWidth,
+                   dropDownMaxHeight: dropDownMaxHeight,
+                   dropDownHeightPadding: dropDownHeightPadding,
                    buttonStartPosition: buttonStartPosition,
                    buttonSize: buttonSize,
-                   buttonSpacing: buttonSpacing,
-                   additionalDropDownSize: additionalDropDownSize)
+                   buttonSpacing: buttonSpacing)
         {
             this.toStringConverter = toStringProvider;
 

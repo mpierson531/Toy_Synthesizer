@@ -63,7 +63,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             InitShiftAndControlKeyShiftUI();
             InitRecordingUI();
 
-            voiceFrontend.InitUI();
+            voiceFrontend.InitUI(game.UIManager);
 
             InitConsole();
         }

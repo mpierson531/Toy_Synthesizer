@@ -72,7 +72,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void DSP_OnGlobalGainChanged(double newValue)
         {
-            gainPropertyBindable.Value = newValue;
+            gainPropertyBindable.Value = GeoMath.ScalarToPercent(newValue);
         }
 
         private void SetGain(double value)

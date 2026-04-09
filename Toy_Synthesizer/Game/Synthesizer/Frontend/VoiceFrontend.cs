@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using GeoLib.GeoGraphics.UI;
 using GeoLib.GeoGraphics.UI.Widgets;
 using GeoLib.GeoMaths;
+using GeoLib.GeoShapes;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
@@ -43,13 +44,20 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
         private GroupWidget voicesGroup;
 
+        private DropDownWidget voiceUtilitiesDropDown;
+
+        private readonly object lockObject = new object();
+
         private double shiftSemitoneAmount;
         private double controlSemitoneAmount;
 
         private double? currentShiftShiftedSemitoneAmount;
         private double? currentControlShiftedSemitoneAmount;
 
-        private readonly Dictionary<Keys, Voice[]> keyVoiceBindings;
+        private readonly Dictionary<Keys, ViewableList<Voice>> keyVoiceBindings;
+
+        private readonly string[] utilityActionNames;
+        private readonly Action[] utilityActions;
 
         public double ShiftSemitoneAmount
         {
@@ -114,23 +122,23 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             ShiftSemitoneAmount = DEFAULT_SHIFT_SEMITONE_AMOUNT;
             ControlSemitoneAmount = DEFAULT_CONTROL_SEMITONE_AMOUNT;
 
-            keyVoiceBindings = new Dictionary<Keys, Voice[]>(defaultKeyVoiceBindings.Count);
+            keyVoiceBindings = new Dictionary<Keys, ViewableList<Voice>>(defaultKeyVoiceBindings.Count);
 
             foreach (KeyValuePair<Keys, ImmutableArray<Voice>> binding in defaultKeyVoiceBindings)
             {
                 Voice[] voicesCopy = binding.Value.ToArray(voice => voice.Copy(deepCopy: true));
 
-                keyVoiceBindings.Add(binding.Key, voicesCopy);
+                keyVoiceBindings.Add(binding.Key, new ViewableList<Voice>(voicesCopy));
             }
 
-            foreach (Voice[] voices in keyVoiceBindings.Values)
+            foreach (ViewableList<Voice> voices in keyVoiceBindings.Values)
             {
-                for (int index = 0; index < voices.Length; index++)
+                for (int index = 0; index < voices.Count; index++)
                 {
                     voices[index].LPF = new StateVariableLPF(20000, 0.25, game.Synthesizer.SampleRate);
                 }
 
-                for (int index = 0; index < voices.Length; index++)
+                for (int index = 0; index < voices.Count; index++)
                 {
                     AudioSourceCommand addVoiceCommand = SynthesizerCommands.AddVoice(voices[index]);
 
@@ -148,13 +156,15 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             });
 
             game.Synthesizer.SendCommand(ref forEachVoiceCommand);
+
+            InitUtilityActions(out utilityActionNames, out utilityActions);
         }
 
         public bool KeyDown(Keys key, bool isRepeat, float holdTime)
         {
-            if (!isRepeat && keyVoiceBindings.TryGetValue(key, out Voice[] voices))
+            if (!isRepeat && keyVoiceBindings.TryGetValue(key, out ViewableList<Voice> voices))
             {
-                for (int index = 0; index < voices.Length; index++)
+                for (int index = 0; index < voices.Count; index++)
                 {
                     AudioSourceCommand voiceOnCommand = SynthesizerCommands.VoiceOn(voices[index]);
 
@@ -187,9 +197,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
         public bool KeyUp(Keys key)
         {
-            if (keyVoiceBindings.TryGetValue(key, out Voice[] voices))
+            if (keyVoiceBindings.TryGetValue(key, out ViewableList<Voice> voices))
             {
-                for (int index = 0; index < voices.Length; index++)
+                for (int index = 0; index < voices.Count; index++)
                 {
                     AudioSourceCommand voiceOffCommand = SynthesizerCommands.VoiceOff(voices[index]);
 
@@ -220,57 +230,34 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             return false;
         }
 
-        public void AddVoiceToExistingKeyBinding(Keys key, Voice voice)
-        {
-            AddVoicesToExistingKeyBinding(key, new Voice[] { voice });
-        }
-
-        public void AddVoicesToExistingKeyBinding(Keys key, Voice[] voices)
-        {
-            if (!keyVoiceBindings.TryGetValue(key, out Voice[] existingVoices))
-            {
-                throw new InvalidOperationException($"No binding for key \"{key}\" exists.");
-            }
-
-            keyVoiceBindings.Remove(key);
-
-            Voice[] allVoices = ArrayUtils.Concatenate(voices, existingVoices);
-
-            keyVoiceBindings.Add(key, allVoices);
-
-            for (int index = 0; index < voices.Length; index++)
-            {
-                AudioSourceCommand addVoiceCommand = SynthesizerCommands.AddVoice(voices[index]);
-
-                game.DSP.SendAudioSourceCommand(game.Synthesizer, addVoiceCommand);
-            }
-        }
-
         public void AddVoiceKeyBinding(Keys key, Voice voice)
         {
-            AddVoicesKeyBinding(key, new Voice[] { voice });
-        }
-
-        public void AddVoicesKeyBinding(Keys key, Voice[] voices)
-        {
-            keyVoiceBindings.Add(key, voices);
-
-            for (int index = 0; index < voices.Length; index++)
+            if (keyVoiceBindings.TryGetValue(key, out ViewableList<Voice> currentKeyVoices))
             {
-                AudioSourceCommand addVoiceCommand = SynthesizerCommands.AddVoice(voices[index]);
-
-                game.DSP.SendAudioSourceCommand(game.Synthesizer, addVoiceCommand);
+                currentKeyVoices.Add(voice);
+            }
+            else
+            {
+                keyVoiceBindings.Add(key, new ViewableList<Voice>(voice));
             }
         }
 
-        public void InitUI()
+        public void InitUI(UIManager uiManager)
         {
-            string xml = @"
+            string xml = $@"
 <Layout>
 
     <Window Title=""Voices"" X=""50"" Y=""50"" W=""25%"" H=""60%"">
 
-        <ScrollPane X=""0%"" Y=""0%"" W=""100%"" H=""95%""/>
+        <ScrollPane X=""0%"" Y=""7.5%"" W=""100%"" H=""87.5%""/>
+
+        <DropDown Position=""(2.5%, 1%)""
+                  Size=""(17.5%, 5%)"" 
+                  DropDownWidth=""350%""
+                  ButtonSize=""(325%, 100%)""
+                  Items=""[Match Notes (by frequency), Match Notes (by name)]""
+                  CoverButtonText=""Utilities""
+                  Name=""{VoiceUtilitiesDropDownName}""/>
 
     </Window>
 
@@ -300,6 +287,17 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
                 InitVoiceGroup(voice, ref currentY, offsetYFirst: true);
             };
+
+            voiceUtilitiesDropDown = window.FindAsByNameDeepSearch<DropDownWidget>(VoiceUtilitiesDropDownName);
+
+            voiceUtilitiesDropDown.OnSelect += OnVoiceUtilitySelect;
+        }
+
+        private void OnVoiceUtilitySelect(Button _, int index)
+        {
+            Action action = utilityActions[index];
+
+            action();
         }
 
         private void InitVoiceGroup(Voice voice, ref float currentY, bool offsetYFirst)
@@ -336,6 +334,63 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             voicesGroup.AddChildRange(voiceGroups);
         }
+
+        private void InitUtilityActions(out string[] actionNames, out Action[] actions)
+        {
+            actionNames = new string[] { "Match notes (from frequency", "Match notes (from voice name)" };
+
+            actions = new Action[] { MatchNotes_FromFrequency, MatchNotes_FromName };
+        }
+
+        // TODO: In the MatchNotes_ methods, I'm locking. Maybe find another way without locking.
+        private void MatchNotes_FromFrequency()
+        {
+            void MatchNoteFrequency(VoiceGroup voiceGroup)
+            {
+                Utils.Assert(synthesizer.ContainsVoice(voiceGroup.Voice), "voice was not contained in the synthesizer. This should never be reached!");
+
+                if (MidiUtils.TryMatchFrequency(voiceGroup.Voice.CenterFrequency, out MidiNote note))
+                {
+                    voiceGroup.SetVoiceName(note.ToString());
+                }
+            }
+
+            lock (lockObject)
+            {
+                voicesGroup.ForEachOfType<VoiceGroup>(MatchNoteFrequency);
+            }
+        }
+
+        private void MatchNotes_FromName()
+        {
+            void MatchNoteFrequency(VoiceGroup voiceGroup)
+            {
+                Utils.Assert(synthesizer.ContainsVoice(voiceGroup.Voice), "voice was not contained in the synthesizer. This should never be reached!");
+
+                if (MidiUtils.TryMatchNoteName(voiceGroup.Voice.Name, out MidiNote note))
+                {
+                    voiceGroup.SetFrequency(MidiUtils.GetFrequency(note));
+                }
+            }
+
+            lock (lockObject)
+            {
+                voicesGroup.ForEachOfType<VoiceGroup>(MatchNoteFrequency);
+            }
+        }
+
+        private const string VoiceUtilitiesDropDownName = "VoiceUtiltiesDropDown";
+
+        // TODO: Finish
+        /*private void DropAllByOctave()
+        {
+            void DropFrequenciesByOctave(VoiceGroup voiceGroup)
+            {
+                Utils.Assert(synthesizer.ContainsVoice(voiceGroup.Voice), "voice was not contained in the synthesizer. This should never be reached!");
+
+                int currentOctave = MidiUtils.GetOctave(voiceGroup.Voice.CenterFrequency);
+            }
+        }*/
 
         private static Dictionary<Keys, ImmutableArray<Voice>> GetDefaultKeyVoiceBindings()
         {

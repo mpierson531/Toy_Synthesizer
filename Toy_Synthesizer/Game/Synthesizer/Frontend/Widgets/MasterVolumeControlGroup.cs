@@ -61,7 +61,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void DSP_OnMasterVolumeChanged(double newValue)
         {
-            volumePropertyBindable.Value = newValue;
+            volumePropertyBindable.Value = GeoMath.ScalarToPercent(newValue);
         }
 
         private void InitWidgets()

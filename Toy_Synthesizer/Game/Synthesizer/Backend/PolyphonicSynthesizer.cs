@@ -301,7 +301,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             }
         }
 
-        private bool ContainsVoice(Voice voice)
+        public bool ContainsVoice(Voice voice)
         {
             return offVoices.Contains(voice) || onVoices.Contains(voice);
         }

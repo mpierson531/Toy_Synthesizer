@@ -24,10 +24,10 @@ namespace Toy_Synthesizer.Game.UI
             get => DropDownAdapter.CoverButton;
         }
 
-        public Action<Button, int> OnSelect
+        public event Action<Button, int> OnSelect
         {
-            get => DropDownAdapter.OnSelect;
-            set => DropDownAdapter.OnSelect = value;
+            add => DropDownAdapter.OnSelect += value;
+            remove => DropDownAdapter.OnSelect -= value;
         }
 
         public DropDownWidget(Vec2f position, Vec2f size, Func<DropDownWidget, DropDownAdapter> adapterProvider)

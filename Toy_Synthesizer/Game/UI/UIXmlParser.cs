@@ -16,6 +16,8 @@ using GeoLib.GeoUtils.Collections;
 
 using Microsoft.Xna.Framework;
 
+using static Toy_Synthesizer.Game.UI.UIXmlParser;
+
 namespace Toy_Synthesizer.Game.UI
 {
     public class UIXmlParser
@@ -41,7 +43,7 @@ namespace Toy_Synthesizer.Game.UI
             this.uiManager = uiManager;
 
             knownWidgetTypeNames = new ViewableList<string> 
-            { 
+            {
                 "TextButton",
                 "Label", 
                 "PlainLabel", 
@@ -53,6 +55,7 @@ namespace Toy_Synthesizer.Game.UI
                 "GroupWidget",
                 "Slider",
                 "Drawer",
+                "DropDown",
                 "DropDownListView" // DropDownListView should only be used with enums.
             };
 
@@ -74,6 +77,7 @@ namespace Toy_Synthesizer.Game.UI
         }
 
         // Parsing enum lists will not work if this method is not used for the type first.
+        // Also only caches values that Enum.GetValues<T> returns.
         public void CacheEnumType<T>() where T : unmanaged, Enum
         {
             string typeName = typeof(T).Name;
@@ -98,6 +102,7 @@ namespace Toy_Synthesizer.Game.UI
         }
 
         // At the moment, this only supports using all values in an enum type, rather than explicitly specified values.
+        // If the type name of the enum is cached, this will return true, even for empty enums.
         public bool TryParseEnumList(ViewableList<XAttribute> attributes, out ViewableList<object> values)
         {
             if (!TryGetString(attributes, "typename", out string typeName))
@@ -114,14 +119,109 @@ namespace Toy_Synthesizer.Game.UI
                 return false;
             }
 
-            // TODO: Maybe come back, and set values to null but return true, if typeName is valid but enumValues is empty.
-
             values = new ViewableList<object>(enumValues.Count);
 
             foreach (object value in enumValues.Values)
             {
                 values.Add(value);
             }
+
+            return true;
+        }
+
+        // This will return false if the property (under the name of propertyName) does not exist.
+        // If propertyName exists and the list is not empty, this will return true.
+        // See the other overload.
+        public static bool TryParseStringList(ViewableList<XAttribute> attributes, string propertyName, out ViewableList<string> items)
+        {
+            if (!TryGetString(attributes, propertyName, out string list))
+            {
+                items = null;
+
+                return false;
+            }
+
+            return TryParseStringList(list, out items);
+        }
+
+        // Lists of strings may begin with '[' or '{', and end with ']' or '}'. This is not required.
+        // Items in the list should be separated by commas (',').
+        // Instances of single or double quotes (''' or '"') will be included in each string item if it contains quotes.
+        // If the returned list would be empty for any reason, this will return false and items will be set to null.
+        public static bool TryParseStringList(string list, out ViewableList<string> items)
+        {
+            // TODO: I think something might be wrong here; come back.
+
+            if (TextUtils.IsNullEmptyOrWhitespace(list))
+            {
+                items = null;
+
+                return false;
+            }
+
+            list = list.Trim();
+
+            if (!list.Contains(','))
+            {
+                if (list.Length > 0)
+                {
+                    if (list[0] == '[' || list[0] == '{')
+                    {
+                        list = list.Remove(0, 1);
+                    }
+
+                    if (list.Length > 0 && (list[list.Length - 1] == ']' || list[list.Length - 1] == '}'))
+                    {
+                        list = list.Remove(list.Length - 1);
+                    }
+                }
+
+                if (TextUtils.IsNullEmptyOrWhitespace(list))
+                {
+                    items = null;
+
+                    return false;
+                }
+
+                items = new ViewableList<string>(list);
+
+                return true;
+            }
+
+            if (list.Length <= 2)
+            {
+                items = null;
+
+                return false;
+            }
+
+            if (list[0] == '[' || list[0] == '{')
+            {
+                list = list.Remove(0, 1);
+            }
+
+            if (list[list.Length - 1] == ']' || list[list.Length - 1] == '}')
+            {
+                list = list.Remove(list.Length - 1);
+            }
+
+            if (TextUtils.IsNullEmptyOrWhitespace(list))
+            {
+                items = null;
+
+                return false;
+            }
+
+            if (!list.Contains(','))
+            {
+                items = new ViewableList<string>(list);
+
+                return true;
+            }
+
+            string[] itemsArray = list.Split(',');
+
+            items = new ViewableList<string>(itemsArray);
 
             return true;
         }
@@ -208,7 +308,9 @@ namespace Toy_Synthesizer.Game.UI
         {
             ViewableList<XAttribute> attributes = new ViewableList<XAttribute>(element.Attributes());
 
-            (Vec2f position, Vec2f size) = GetBounds(attributes, baseBounds);
+            AABB baseBoundsNotNull = GetBounds(attributes, baseBounds);
+
+            (Vec2f position, Vec2f size) = baseBoundsNotNull;
 
             TypeFactory additionalTypeFactory = additionalTypeFactories.Find(factory => factory.TypeName.Equals(typeName));
 
@@ -233,7 +335,8 @@ namespace Toy_Synthesizer.Game.UI
                     "ScrollPane" => CreateScrollPane(position, size, attributes),
                     "Slider" => CreateNumberSlider(position, size, attributes),
                     "Drawer" => CreateDrawer(position, size, attributes),
-                    "DropDownListView" => CreateDropDownList(position, size, attributes),
+                    "DropDown" => CreateDropDown(baseBoundsNotNull, attributes),
+                    "DropDownListView" => CreateDropDownList(baseBoundsNotNull, attributes),
 
                     _ => throw new InvalidOperationException($"Unsupported UI widget type: \"{typeName}\".")
                 };
@@ -340,6 +443,7 @@ namespace Toy_Synthesizer.Game.UI
             return uiManager.Checkbox(position, size);
         }
 
+        // TODO: Implement support for title bar widgets here.
         private Window CreateWindow(Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
         {
             TryGetString(attributes, "title", out string title);
@@ -384,14 +488,114 @@ namespace Toy_Synthesizer.Game.UI
             return uiManager.Drawer(position, size, orientation, coverButtonText);
         }
 
-        private DropDownListView CreateDropDownList(Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+        // TODO: Implement CreateDropDown
+        // TODO: Implement more properties for UX data for drop downs
+
+        private DropDownWidget CreateDropDown(AABB bounds, ViewableList<XAttribute> attributes)
+        {
+            TryParseStringList(attributes, "items", out ViewableList<string> itemNames);
+
+            string coverButtonText = GetDropDownCoverButtonTextOrDefaultValue(attributes, itemNames, defaultIndex: null);
+
+            UIManager.DropDownUXData uxData = GetDropDownUXData(uiManager, attributes);
+
+            return uiManager.DropDown(bounds.Position, bounds.Size, coverButtonText, itemNames?.Items, itemNames?.Count ?? 0, uxData: uxData);
+        }
+
+        private DropDownListView CreateDropDownList(AABB bounds, ViewableList<XAttribute> attributes)
         {
             TryParseEnumList(attributes, out ViewableList<object> values);
 
-            TryGetInt(attributes, "defaultindex", out int defaultIndex);
-            TryGetString(attributes, "coverbuttontext", out string coverButtonText);
+            bool hasDefaultIndex = TryGetInt(attributes, "defaultindex", out int defaultIndex);
 
-            return uiManager.DropDownList(position, size, values, defaultIndex, coverButtonText);
+            string coverButtonText = GetDropDownCoverButtonTextOrDefaultValue(attributes, values, !hasDefaultIndex ? 0 : defaultIndex);
+
+            UIManager.DropDownUXData uxData = GetDropDownUXData(uiManager, attributes);
+
+            return uiManager.DropDownList(bounds.Position, bounds.Size, values, defaultIndex, coverButtonText, uxData: uxData);
+        }
+
+        private static string GetDropDownCoverButtonTextOrDefaultValue<T>(ViewableList<XAttribute> attributes, ViewableList<T> values, int? defaultIndex)
+        {
+            if (!TryGetString(attributes, "coverbuttontext", out string coverButtonText))
+            {
+                if (values is not null && !values.IsEmpty)
+                {
+                    coverButtonText = values[defaultIndex ?? 0].ToString();
+                }
+            }
+
+            return coverButtonText;
+        }
+
+        private static UIManager.DropDownUXData GetDropDownUXData(UIManager uiManager, ViewableList<XAttribute> attributes)
+        {
+            UIManager.DropDownUXData uxData = uiManager.GetScrollableDropDownUXData();
+
+            if (TryGetBool(attributes, "usescrollpane", out bool useScrollPane))
+            {
+                uxData.UseScrollPane = useScrollPane;
+            }
+
+            bool hasDropDownPosition = TryGetVec2fValue(attributes,
+                                                        DropDownPositionNames,
+                                                        DropDownXPositionNames,
+                                                        DropDownYPositionNames,
+                                                        out Vec2fValue dropDownPosition);
+
+            bool hasDropDownWidth = TryGetFloatValue(attributes, "dropdownwidth", out FloatValue dropDownWidth);
+
+            if (hasDropDownPosition || hasDropDownWidth)
+            {
+                if (hasDropDownPosition)
+                {
+                    uxData.DropDownPosition = dropDownPosition;
+                }
+
+                if (hasDropDownWidth)
+                {
+                    uxData.DropDownWidth = dropDownWidth;
+                }
+            }
+
+            if (TryGetFloatValue(attributes, "dropdownheightpadding", out FloatValue dropDownHeightPadding))
+            {
+                uxData.DropDownHeightPadding = dropDownHeightPadding;
+            }
+
+            if (TryGetFloatValue(attributes, "dropdownmaxheight", out FloatValue dropDownMaxHeight))
+            {
+                uxData.DropDownMaxHeight = dropDownMaxHeight;
+            }
+
+            if (TryGetVec2fValue(attributes,
+                                 DropDownButtonStartPositionNames,
+                                 DropDownButtonStartXNames,
+                                 DropDownButtonStartYNames,
+                                 out Vec2fValue buttonStartPosition))
+            {
+                uxData.ButtonStartPosition = buttonStartPosition;
+            }
+
+            if (TryGetVec2fValue(attributes,
+                                 DropDownButtonSizeNames,
+                                 DropDownButtonWidthNames,
+                                 DropDownButtonHeightNames,
+                                 out Vec2fValue buttonSize))
+            {
+                uxData.ButtonSize = buttonSize;
+            }
+
+            if (TryGetVec2fValue(attributes,
+                                 DropDownButtonSpacingNames,
+                                 DropDownButtonSpacingXNames,
+                                 DropDownButtonSpacingYNames,
+                                 out Vec2fValue buttonSpacing))
+            {
+                uxData.ButtonSpacing = buttonSpacing;
+            }
+
+            return uxData;
         }
 
         private bool IsWidgetName(string name)
@@ -469,6 +673,16 @@ namespace Toy_Synthesizer.Game.UI
             Vec2f position = positionNullable.GetValueOrDefault(Vec2f.Zero);
             Vec2f size = sizeNullable.GetValueOrDefault(Vec2f.Zero);
 
+            return GetBoundsRaw(baseBounds, position, size, positionMode, sizeMode, xIsPercent, yIsPercent, widthIsPercent, heightIsPercent);
+        }
+
+        private static AABB GetBoundsRaw(AABB? baseBounds,
+                                         Vec2f position, Vec2f size,
+                                         PositionMode positionMode,
+                                         SizeMode sizeMode,
+                                         bool xIsPercent, bool yIsPercent, 
+                                         bool widthIsPercent, bool heightIsPercent)
+        {
             if (xIsPercent || yIsPercent || widthIsPercent || heightIsPercent)
             {
                 AABB realBaseBounds = !baseBounds.HasValue ? (AABB)Geo.Instance.Display.WindowBounds : baseBounds.Value;
@@ -541,7 +755,7 @@ namespace Toy_Synthesizer.Game.UI
         {
             TryGetEnum<PositionMode>(attributes, "positionmode", out positionMode);
 
-            return TryGetVec2f(attributes, AllowedPositionAttrNames, AllowedPositionXAttrNames, AllowedPositionYAttrNames,
+            return TryGetVec2f(attributes, PositionAttrNames, PositionXAttrNames, PositionYAttrNames,
                                out position,
                                out xIsPercent,
                                out yIsPercent);
@@ -555,7 +769,7 @@ namespace Toy_Synthesizer.Game.UI
         {
             TryGetEnum<SizeMode>(attributes, "sizemode", out sizeMode);
 
-            return TryGetVec2f(attributes, AllowedSizeAttrNames, AllowedWidthAttrNames, AllowedHeightAttrNames, 
+            return TryGetVec2f(attributes, SizeAttrNames, WidthAttrNames, HeightAttrNames, 
                                out size,
                                out xIsPercent,
                                out yIsPercent);
@@ -573,6 +787,51 @@ namespace Toy_Synthesizer.Game.UI
                                                     LayoutOrientation defaultOrientation = LayoutOrientation.Vertical)
         {
             return TryGetEnum<LayoutOrientation>(attributes, "orientation", out layoutOrientation, defaultOrientation);
+        }
+
+        public static bool TryGetVec2fValue(ViewableList<XAttribute> attributes,
+                                            ReadOnlyMemory<string> allowedNames,
+                                            ReadOnlyMemory<string> allowedXNames,
+                                            ReadOnlyMemory<string> allowedYNames,
+                                            out Vec2fValue value)
+        {
+            // Due to how Vec2fValue works, if x or y is percent, both have to be treated as percentages.
+
+            if (!TryGetVec2f(attributes, allowedNames, allowedXNames, allowedYNames,
+                             out Vec2f? rawValue, 
+                             out bool xIsPercent, out bool yIsPercent))
+            {
+                value = default;
+
+                return false;
+            }
+
+            if (xIsPercent || yIsPercent)
+            {
+                rawValue = GeoMath.PercentToScalar(rawValue.Value);
+
+                value = Vec2fValue.Normalized(rawValue.Value);
+            }
+            else
+            {
+                value = Vec2fValue.Absolute(rawValue.Value);
+            }
+
+            return true;
+        }
+
+        public static bool TryGetFloatValue(ViewableList<XAttribute> attributes, string name, out FloatValue value)
+        {
+            if (!TryGetFloat(attributes, name, out float rawValue, out bool isPercent))
+            {
+                value = default;
+
+                return false;
+            }
+
+            value = isPercent ? FloatValue.Normalized(GeoMath.PercentToScalar(rawValue)) : FloatValue.Absolute(rawValue);
+
+            return true;
         }
 
         public static bool TryGetVec2f(ViewableList<XAttribute> attributes, 
@@ -653,28 +912,6 @@ namespace Toy_Synthesizer.Game.UI
                                        out bool isPercent)
         {
             return TryGetNumber<float>(attributes, name, out value, out isPercent);
-
-            /*for (int index = 0; index < attributes.Count; index++)
-            {
-                XAttribute attribute = attributes[index];
-
-                string attributeName = attribute.Name.LocalName.ToLower();
-                string attributeValue = attribute.Value;
-
-                if (attributeName == name)
-                {
-                    attributes.RemoveAt(index);
-
-                    value = ParseFloat(attributeValue, out isPercent);
-
-                    return true;
-                }
-            }
-
-            value = 0f;
-            isPercent = false;
-
-            return false;*/
         }
 
         public static bool TryGetDouble(ViewableList<XAttribute> attributes, string name,
@@ -682,54 +919,11 @@ namespace Toy_Synthesizer.Game.UI
                                         out bool isPercent)
         {
             return TryGetNumber<double>(attributes, name, out value, out isPercent);
-
-            /*for (int index = 0; index < attributes.Count; index++)
-            {
-                XAttribute attribute = attributes[index];
-
-                string attributeName = attribute.Name.LocalName.ToLower();
-                string attributeValue = attribute.Value;
-
-                if (attributeName == name)
-                {
-                    attributes.RemoveAt(index);
-
-                    value = ParseDouble(attributeValue, out isPercent);
-
-                    return true;
-                }
-            }
-
-            value = 0.0;
-            isPercent = false;
-
-            return false;*/
         }
 
         public static bool TryGetInt(ViewableList<XAttribute> attributes, string name, out int value)
         {
             return TryGetNumber<int>(attributes, name, out value, out _);
-
-            /*for (int index = 0; index < attributes.Count; index++)
-            {
-                XAttribute attribute = attributes[index];
-
-                string attributeName = attribute.Name.LocalName.ToLower();
-                string attributeValue = attribute.Value;
-
-                if (attributeName == name)
-                {
-                    attributes.RemoveAt(index);
-
-                    value = ParseInt(attributeValue);
-
-                    return true;
-                }
-            }
-
-            value = 0;
-
-            return false;*/
         }
 
         public static bool TryGetNumber<T>(ViewableList<XAttribute> attributes, 
@@ -1222,23 +1416,55 @@ namespace Toy_Synthesizer.Game.UI
             }
         }
 
-        public static readonly ReadOnlyMemory<string> AllowedPositionAttrNames;
-        public static readonly ReadOnlyMemory<string> AllowedPositionXAttrNames;
-        public static readonly ReadOnlyMemory<string> AllowedPositionYAttrNames;
+        public static readonly ReadOnlyMemory<string> PositionAttrNames;
+        public static readonly ReadOnlyMemory<string> PositionXAttrNames;
+        public static readonly ReadOnlyMemory<string> PositionYAttrNames;
 
-        public static readonly ReadOnlyMemory<string> AllowedSizeAttrNames;
-        public static readonly ReadOnlyMemory<string> AllowedWidthAttrNames;
-        public static readonly ReadOnlyMemory<string> AllowedHeightAttrNames;
+        public static readonly ReadOnlyMemory<string> SizeAttrNames;
+        public static readonly ReadOnlyMemory<string> WidthAttrNames;
+        public static readonly ReadOnlyMemory<string> HeightAttrNames;
+
+        public static readonly ReadOnlyMemory<string> DropDownPositionNames;
+        public static readonly ReadOnlyMemory<string> DropDownXPositionNames;
+        public static readonly ReadOnlyMemory<string> DropDownYPositionNames;
+
+        public static readonly ReadOnlyMemory<string> DropDownButtonStartPositionNames;
+        public static readonly ReadOnlyMemory<string> DropDownButtonStartXNames;
+        public static readonly ReadOnlyMemory<string> DropDownButtonStartYNames;
+
+        public static readonly ReadOnlyMemory<string> DropDownButtonSizeNames;
+        public static readonly ReadOnlyMemory<string> DropDownButtonWidthNames;
+        public static readonly ReadOnlyMemory<string> DropDownButtonHeightNames;
+
+        public static readonly ReadOnlyMemory<string> DropDownButtonSpacingNames;
+        public static readonly ReadOnlyMemory<string> DropDownButtonSpacingXNames;
+        public static readonly ReadOnlyMemory<string> DropDownButtonSpacingYNames;
 
         static UIXmlParser()
         {
-            AllowedPositionAttrNames = new string[] { "position" };
-            AllowedPositionXAttrNames = new string[] { "x" };
-            AllowedPositionYAttrNames = new string[] { "y" };
+            PositionAttrNames = new string[] { "position" };
+            PositionXAttrNames = new string[] { "x" };
+            PositionYAttrNames = new string[] { "y" };
 
-            AllowedSizeAttrNames = new string[] { "size" };
-            AllowedWidthAttrNames = new string[] { "width", "w" };
-            AllowedHeightAttrNames = new string[] { "height", "h" };
+            SizeAttrNames = new string[] { "size" };
+            WidthAttrNames = new string[] { "width", "w" };
+            HeightAttrNames = new string[] { "height", "h" };
+
+            DropDownPositionNames = new string[] { "dropdownposition" };
+            DropDownXPositionNames = ReadOnlyMemory<string>.Empty;
+            DropDownYPositionNames = ReadOnlyMemory<string>.Empty;
+
+            DropDownButtonStartPositionNames = new string[] { "buttonstartposition" };
+            DropDownButtonStartXNames = new string[] { "buttonstartx" };
+            DropDownButtonStartYNames = new string[] { "buttonstarty" };
+
+            DropDownButtonSizeNames = new string[] { "buttonsize" };
+            DropDownButtonWidthNames = new string[] { "buttonwidth" };
+            DropDownButtonHeightNames = new string[] { "buttonheight" };
+
+            DropDownButtonSpacingNames = new string[] { "buttonspacing" };
+            DropDownButtonSpacingXNames = new string[] { "buttonspacingx" };
+            DropDownButtonSpacingYNames = new string[] { "buttonspacingy" };
         }
 
         public enum SizeMode

@@ -133,12 +133,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             sustainPropertyBindable = new PropertyBindable<double>("Sustain");
             releasePropertyBindable = new PropertyBindable<double>("Release");
 
-            namePropertyBindable.OnValueChangedTyped += SetVoiceName;
-            frequencyPropertyBindable.OnValueChangedTyped += SetFrequency;
-            attackPropertyBindable.OnValueChangedTyped += SetAttack;
-            decayPropertyBindable.OnValueChangedTyped += SetDecay;
-            sustainPropertyBindable.OnValueChangedTyped += SetSustain;
-            releasePropertyBindable.OnValueChangedTyped += SetRelease;
+            namePropertyBindable.OnValueChangedTyped += SetVoiceNameInternal;
+            frequencyPropertyBindable.OnValueChangedTyped += SetFrequencyInternal;
+            attackPropertyBindable.OnValueChangedTyped += SetAttackInternal;
+            decayPropertyBindable.OnValueChangedTyped += SetDecayInternal;
+            sustainPropertyBindable.OnValueChangedTyped += SetSustainInternal;
+            releasePropertyBindable.OnValueChangedTyped += SetReleaseInternal;
         }
 
         private void CreateWidgets(UIManager uiManager)
@@ -264,18 +264,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             oscillatorsDrawer.RemoveChild(oscillatorControlGroup);
         }
 
-        private void SetVoiceName(string name)
-        {
-            if (Voice is null)
-            {
-                return;
-            }
-
-            Name = $"{Voice.Name}_{Voice.CenterFrequency}Hz_VoiceGroup";
-
-            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceName(Voice, name));
-        }
-
         private void UpdateFromVoice()
         {
             namePropertyBindable.SetValueRaw(Voice.Name);
@@ -318,27 +306,53 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             }, start: 0, end: Count);
         }
 
-        private void SetFrequency(double frequency)
+        public void SetVoiceName(string name)
+        {
+            SetVoiceNameInternal(name);
+
+            NameTextField.SetTextWithoutProperty(name);
+        }
+
+        public void SetFrequency(double frequency)
+        {
+            SetFrequencyInternal(frequency);
+
+            FrequencyTextField.SetTextWithoutProperty(frequency.ToString());
+        }
+
+        private void SetVoiceNameInternal(string name)
+        {
+            if (Voice is null)
+            {
+                return;
+            }
+
+            Name = $"{Voice.Name}_{Voice.CenterFrequency}Hz_VoiceGroup";
+
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceName(Voice, name));
+        }
+
+        private void SetFrequencyInternal(double frequency)
         {
             game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceCenterFrequency(Voice, frequency));
         }
 
-        private void SetAttack(double attack)
+        private void SetAttackInternal(double attack)
         {
             game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceAttack(voice, attack));
         }
 
-        private void SetDecay(double decay)
+        private void SetDecayInternal(double decay)
         {
             game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceDecay(voice, decay));
         }
 
-        private void SetSustain(double sustain)
+        private void SetSustainInternal(double sustain)
         {
             game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceSustain(voice, sustain));
         }
 
-        private void SetRelease(double release)
+        private void SetReleaseInternal(double release)
         {
             game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceRelease(voice, release));
         }

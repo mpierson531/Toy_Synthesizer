@@ -9,7 +9,7 @@ using GeoLib.GeoUtils.Collections;
 
 namespace Toy_Synthesizer.Game.UI
 {
-
+    // TODO: Implement better sizing parameters for drop down group.
     public class DropDownAdapter : Disposable
     {
         private bool isInitialized;
@@ -30,11 +30,13 @@ namespace Toy_Synthesizer.Game.UI
 
         // Treated as values relative to group/the parent.
         public Vec2fValue DropDownPosition { get; set; }
-        public Vec2fValue? DropDownMaxSize { get; set; }
+        public FloatValue? DropDownWidth { get; set; }
+        public FloatValue? DropDownMaxHeight { get; set; }
+        public FloatValue? DropDownHeightPadding { get; set; }
+
         public Vec2fValue ButtonStartPosition { get; set; }
         public Vec2fValue ButtonSize { get; set; }
         public Vec2fValue ButtonSpacing { get; set; }
-        public Vec2fValue? AdditionalDropDownSize { get; set; }
 
         public GroupWidget Group
         {
@@ -56,7 +58,7 @@ namespace Toy_Synthesizer.Game.UI
             get => isShowing;
         }
 
-        public Action<Button, int> OnSelect { get; set; }
+        public event Action<Button, int> OnSelect;
 
         public int ItemCount
         {
@@ -70,11 +72,12 @@ namespace Toy_Synthesizer.Game.UI
                                Func<string, int, Vec2f, Vec2f, Button> childProvider,
                                Func<Vec2f, Vec2f, GroupWidget> groupProvider,
                                Vec2fValue dropDownPosition,
-                               Vec2fValue? dropDownMaxSize,
+                               FloatValue? dropDownWidth,
+                               FloatValue? dropDownMaxHeight,
+                               FloatValue? dropDownHeightPadding,
                                Vec2fValue buttonStartPosition,
                                Vec2fValue buttonSize,
                                Vec2fValue buttonSpacing,
-                               Vec2fValue? additionalDropDownSize,
                                Action<Button, int> onSelect = null)
         {
             isInitialized = false;
@@ -86,11 +89,12 @@ namespace Toy_Synthesizer.Game.UI
             CoverButtonProvider = coverButtonProvider;
             ChildProvider = childProvider;
             DropDownPosition = dropDownPosition;
-            DropDownMaxSize = dropDownMaxSize;
+            DropDownWidth = dropDownWidth;
+            DropDownMaxHeight = dropDownMaxHeight;
+            DropDownHeightPadding = dropDownHeightPadding;
             ButtonStartPosition = buttonStartPosition;
             ButtonSize = buttonSize;
             ButtonSpacing = buttonSpacing;
-            AdditionalDropDownSize = additionalDropDownSize;
 
             this.group = group;
 
@@ -134,7 +138,14 @@ namespace Toy_Synthesizer.Game.UI
                 dropDownGroup.Dispose();
             }
 
-            dropDownGroup = groupProvider(group.Position, group.Size);
+            Vec2f buttonPosition = GetButtonStartPosition();
+            Vec2f buttonSize = GetButtonSize();
+            Vec2f buttonSpacing = GetButtonSpacing();
+
+            Vec2f dropDownPosition = GetDropDownPosition();
+            Vec2f dropDownSize = GetDropDownSize(buttonSize, buttonSpacing);
+
+            dropDownGroup = groupProvider(dropDownPosition, dropDownSize);
 
             group.OnReposition += ParentRepositioned;
             group.OnResize += ParentResized;
@@ -345,19 +356,21 @@ namespace Toy_Synthesizer.Game.UI
 
         private Vec2f GetDropDownSize(Vec2f buttonSize, Vec2f buttonSpacing)
         {
-            Vec2f size = new Vec2f(buttonSize.X, 0f) + (MathF.Max(ItemCount, 1) * new Vec2f(0f, buttonSize.Y)) + ((ItemCount - 1) * buttonSpacing);
+            float width = DropDownWidth.HasValue ? DropDownWidth.Value.Compute(group.Size.X) : buttonSize.X;
 
-            if (AdditionalDropDownSize.HasValue)
+            float height = (MathF.Max(ItemCount, 1) * buttonSize.Y) + ((ItemCount - 1) * buttonSpacing.Y);
+
+            if (DropDownHeightPadding.HasValue)
             {
-                size += AdditionalDropDownSize.Value.Compute(group.Size);
+                height += DropDownHeightPadding.Value.Compute(group.Size.Y);
             }
 
-            if (DropDownMaxSize.HasValue)
+            if (DropDownMaxHeight.HasValue)
             {
-                size = Vec2f.Min(size, DropDownMaxSize.Value.Compute(group.Size));
+                height = MathF.Min(height, DropDownMaxHeight.Value.Compute(group.Size.Y));
             }
 
-            return size;
+            return new Vec2f(width, height);
         }
 
         private Vec2f GetButtonStartPosition()

@@ -228,25 +228,6 @@ namespace Toy_Synthesizer.Game
 
         protected override void InitializeInternal()
         {
-            /*unsafe
-            {
-                Console.WriteLine(sizeof(DSPCommand));
-
-                Console.WriteLine();
-            }
-            var bufferStorage = CommonUtils.RawValueStorage.ValueStorageUtils.FromBuffer<double, CommonUtils.RawValueStorage.RawValueStorage_64B>([0, 1.894512389f, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-
-            double[] floats = new double[CommonUtils.RawValueStorage.RawValueStorage_64B.STORAGE_SIZE / sizeof(double)];
-
-            bufferStorage.ReadBuffer<double>(floats, out int realCount);
-
-            for (int index = 0; index < realCount; index++)
-            {
-                Console.WriteLine(floats[index]);
-            }
-
-            Geo.Exit();*/
-
             InitLogManager();
 
             MessagePackSerializer.DefaultOptions = MessagePackSerializerOptions.Standard.WithResolver(GeoLib.GeoSerialization.GeoSerializationResolver.Readable);

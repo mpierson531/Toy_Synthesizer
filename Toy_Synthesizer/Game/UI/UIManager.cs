@@ -92,12 +92,13 @@ namespace Toy_Synthesizer.Game.UI
             public bool UseScrollPane;
 
             public Vec2fValue DropDownPosition;
-            public Vec2fValue? DropDownMaxSize;
+            public FloatValue? DropDownWidth;
+            public FloatValue? DropDownHeightPadding;
+            public FloatValue? DropDownMaxHeight;
+
             public Vec2fValue ButtonStartPosition;
             public Vec2fValue ButtonSize;
             public Vec2fValue ButtonSpacing;
-
-            public Vec2fValue? AdditionalDropDownSize;
 
             public ButtonUXData? ButtonUXData;
         }
@@ -812,7 +813,7 @@ namespace Toy_Synthesizer.Game.UI
 
         public DropDownUXData GetDropDownUXData()
         {
-            Vec2fValue buttonStartPosition = Vec2fValue.Normalized(0.025f, 1.25f);
+            Vec2fValue buttonStartPosition = Vec2fValue.Normalized(0.05f, 1.25f);
             Vec2fValue dropDownPosition = Vec2fValue.Normalized(0f, 1.05f);
 
             return new DropDownUXData
@@ -820,14 +821,16 @@ namespace Toy_Synthesizer.Game.UI
                 UseScrollPane = false,
 
                 DropDownPosition = dropDownPosition,
-                DropDownMaxSize = null,
+
+                DropDownWidth = FloatValue.Normalized(1.075f),
+                DropDownMaxHeight = null,
+
+                DropDownHeightPadding = FloatValue.Normalized(0.4f),
 
                 ButtonStartPosition = buttonStartPosition,
-                ButtonSize = Vec2fValue.Normalized(0.95f, 1f),
+                ButtonSize = Vec2fValue.Normalized(0.9f, 1f),
 
                 ButtonSpacing = Vec2fValue.Normalized(0f, 0.2f),
-
-                AdditionalDropDownSize = Vec2fValue.Normalized(0.05f, 0.4f),
 
                 ButtonUXData = DefaultDropDownButtonUXData,
             };
@@ -841,7 +844,7 @@ namespace Toy_Synthesizer.Game.UI
 
             // Since it can scroll, clamp the height of the drop down.
 
-            uxData.DropDownMaxSize = Vec2fValue.Normalized(1f, 5f);
+            uxData.DropDownMaxHeight = FloatValue.Normalized(5f);
 
             return uxData;
         }
@@ -1744,11 +1747,12 @@ namespace Toy_Synthesizer.Game.UI
                                                                    childProvider,
                                                                    groupProvider,
                                                                    dropDownPosition: nonNullUXData.DropDownPosition,
-                                                                   dropDownMaxSize: nonNullUXData.DropDownMaxSize,
+                                                                   dropDownWidth: nonNullUXData.DropDownWidth,
+                                                                   dropDownMaxHeight: nonNullUXData.DropDownMaxHeight,
+                                                                   dropDownHeightPadding: nonNullUXData.DropDownHeightPadding,
                                                                    buttonStartPosition: nonNullUXData.ButtonStartPosition,
                                                                    buttonSize: nonNullUXData.ButtonSize,
                                                                    buttonSpacing: nonNullUXData.ButtonSpacing,
-                                                                   additionalDropDownSize: nonNullUXData.AdditionalDropDownSize,
                                                                    values: values,
                                                                    defaultIndex: defaultIndex,
                                                                    toStringProvider: toStringConverter);
@@ -1787,11 +1791,12 @@ namespace Toy_Synthesizer.Game.UI
                                            childProvider: childProvider,
                                            groupProvider: groupProvider,
                                            dropDownPosition: nonNullUXData.DropDownPosition,
-                                           dropDownMaxSize: nonNullUXData.DropDownMaxSize,
+                                           dropDownWidth: nonNullUXData.DropDownWidth,
+                                           dropDownMaxHeight: nonNullUXData.DropDownMaxHeight,
+                                           dropDownHeightPadding: nonNullUXData.DropDownHeightPadding,
                                            buttonStartPosition: nonNullUXData.ButtonStartPosition,
                                            buttonSize: nonNullUXData.ButtonSize,
                                            buttonSpacing: nonNullUXData.ButtonSpacing,
-                                           additionalDropDownSize: nonNullUXData.AdditionalDropDownSize,
                                            onSelect: onSelect);
             };
 

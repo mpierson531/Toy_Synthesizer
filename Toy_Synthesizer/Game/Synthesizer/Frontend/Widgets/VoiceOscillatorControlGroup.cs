@@ -219,7 +219,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
                 <DropDownListView Position=""(45%, 50%)"" 
                    Size=""(50%, 20%)"" 
-                   MaxCharacters=""20"" 
+                   MaxCharacters=""20""
                    DefaultIndex=""0""
                    TypeName=""WaveformType""
                    Name=""{WaveformTypeDropDownName}""/>
