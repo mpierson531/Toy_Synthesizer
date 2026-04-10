@@ -22,14 +22,14 @@ namespace Toy_Synthesizer.Game.UI
 {
     public class UIXmlParser
     {
-        public static ViewableList<Widget> Parse(UIManager uiManager, string xmlContent, GroupWidget rootParent = null)
+        public static ViewableList<Widget> Parse(Game game, string xmlContent, GroupWidget rootParent = null)
         {
-            UIXmlParser parser = new UIXmlParser(uiManager);
+            UIXmlParser parser = new UIXmlParser(game);
 
             return parser.Parse(xmlContent, rootParent);
         }
 
-        private readonly Geo geo;
+        private readonly Game game;
         private readonly UIManager uiManager;
 
         private readonly ViewableList<string> knownWidgetTypeNames;
@@ -38,9 +38,10 @@ namespace Toy_Synthesizer.Game.UI
 
         private readonly Dictionary<string, Dictionary<string, object>> enumTypeCache;
 
-        public UIXmlParser(UIManager uiManager)
+        public UIXmlParser(Game game)
         {
-            this.uiManager = uiManager;
+            this.game = game;
+            this.uiManager = game.UIManager;
 
             knownWidgetTypeNames = new ViewableList<string> 
             {
@@ -318,7 +319,7 @@ namespace Toy_Synthesizer.Game.UI
 
             if (additionalTypeFactory is not null)
             {
-                widget = additionalTypeFactory.Create(uiManager, position, size, attributes);
+                widget = additionalTypeFactory.Create(game, uiManager, position, size, attributes);
             }
             else
             {
@@ -1492,7 +1493,7 @@ namespace Toy_Synthesizer.Game.UI
                 this.TypeName = typeName;
             }
 
-            public abstract Widget Create(UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes);
+            public abstract Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes);
         }
     }
 }

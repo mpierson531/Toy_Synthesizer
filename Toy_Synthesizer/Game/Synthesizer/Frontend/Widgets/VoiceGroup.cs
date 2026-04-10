@@ -12,6 +12,7 @@ using GeoLib.GeoGraphics.UI;
 using GeoLib.GeoGraphics.UI.Data;
 using GeoLib.GeoGraphics.UI.Data.Generic;
 using GeoLib.GeoGraphics.UI.Widgets;
+using GeoLib.GeoInput;
 using GeoLib.GeoMaths;
 using GeoLib.GeoShapes;
 using GeoLib.GeoUtils;
@@ -19,6 +20,7 @@ using GeoLib.GeoUtils.Collections;
 
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 
 using Toy_Synthesizer.Game.DigitalSignalProcessing;
 using Toy_Synthesizer.Game.Synthesizer.Backend;
@@ -26,9 +28,12 @@ using Toy_Synthesizer.Game.UI;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
+    // TODO: Keybinding stuff will need to be reworked if I want to support multi-key keybindings
     public class VoiceGroup : ScrollPane
     {
         internal Game game;
+
+        private VoiceFrontend voiceFrontend;
 
         private Voice voice;
 
@@ -59,6 +64,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private PropertyBindable<double> frequencyPropertyBindable;
         private ConvertingPropertyBinding<double, string> frequencyBinding;
 
+        private PropertyBindable<Keys> voiceKeybindingPropertyBindable;
+
         private PropertyBindable<double> attackPropertyBindable;
         private ConvertingPropertyBinding<double, string> attackBinding;
 
@@ -79,6 +86,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private PlainLabel FrequencyDisplayLabel;
         private TextField FrequencyTextField;
 
+        private PlainLabel KeybindingDisplayLabel;
+        private TextButton KeybindingButton;
+
         private PlainLabel AttackDisplayLabel;
         private PlainLabel DecayDisplayLabel;
         private PlainLabel SustainDisplayLabel;
@@ -93,6 +103,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private Button addOscillatorButton;
         private IListener addOscillatorsButtonTooltip;
 
+        private bool isSettingKeybinding;
+        private InputListener uiKeybindingInputSetterListener;
+        private readonly ImmutableArray<Keys> invalidKeybindingKeys;
+        private bool activatedBindingIsEmpty;
+        private string activatedKeybindingPreviousText;
+
         private float drawerBeginX_Percent = 20f;
         private float drawerBeginY_Percent = 160f;
         private readonly float oscillatorsVerticalDrawerSpacing_Percent = 50f;
@@ -100,7 +116,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         public event Action<VoiceGroup, Voice, Voice> OnVoiceChanged;
 
-        public VoiceGroup(Vec2f position, Vec2f size, Voice voice, Game game)
+        public VoiceGroup(VoiceFrontend voiceFrontend, Vec2f position, Vec2f size, Voice voice, Game game)
             : base(position, size,
                    scrollBarWidth: game.UIManager.GetScrollBarTrackSize(), 
                    style: game.UIManager.ScrollPaneStyle(),
@@ -109,7 +125,17 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             this.game = game;
 
+            this.voiceFrontend = voiceFrontend;
+
+            invalidKeybindingKeys = new ImmutableArray<Keys>(new Keys[]
+            {
+                Keys.Enter,
+                Keys.Escape
+            });
+
             InitPropertyBindables();
+
+            InitUIKeybindingInputSetterListener();
 
             //currentOscillatorControlGroups = new ViewableList<VoiceOscillatorControlGroup>(100);
 
@@ -127,14 +153,22 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private void InitPropertyBindables()
         {
             namePropertyBindable = new PropertyBindable<string>("Name");
+
             frequencyPropertyBindable = new PropertyBindable<double>("Frequency");
+
             attackPropertyBindable = new PropertyBindable<double>("Attack");
             decayPropertyBindable = new PropertyBindable<double>("Decay");
             sustainPropertyBindable = new PropertyBindable<double>("Sustain");
             releasePropertyBindable = new PropertyBindable<double>("Release");
 
+            voiceKeybindingPropertyBindable = new PropertyBindable<Keys>("Keybinding");
+
             namePropertyBindable.OnValueChangedTyped += SetVoiceNameInternal;
+
             frequencyPropertyBindable.OnValueChangedTyped += SetFrequencyInternal;
+
+            voiceKeybindingPropertyBindable.OnValueChangedTyped += SetKeybindingInternal;
+
             attackPropertyBindable.OnValueChangedTyped += SetAttackInternal;
             decayPropertyBindable.OnValueChangedTyped += SetDecayInternal;
             sustainPropertyBindable.OnValueChangedTyped += SetSustainInternal;
@@ -143,7 +177,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void CreateWidgets(UIManager uiManager)
         {
-            uiXmlParser = new UIXmlParser(uiManager);
+            uiXmlParser = new UIXmlParser(uiManager.Game);
 
             uiXmlParser.AddTypeFactory(new VoiceMixControlGroupFactory());
             uiXmlParser.AddTypeFactory(new VoiceOscillatorControlGroupFactory());
@@ -159,6 +193,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             FrequencyDisplayLabel = FindAsByNameDeepSearch<PlainLabel>(FrequencyDisplayLabelName);
             FrequencyTextField = FindAsByNameDeepSearch<TextField>(FrequencyTextFieldName);
+
+            KeybindingDisplayLabel = FindAsByNameDeepSearch<PlainLabel>(KeybindingLabelName);
+            KeybindingButton = FindAsByNameDeepSearch<TextButton>(KeybindingButtonName);
+
+            KeybindingButton.OnClick += ActivateKeybindingSetting;
 
             AttackDisplayLabel = FindAsByNameDeepSearch<PlainLabel>(AttackDisplayLabelName);
             DecayDisplayLabel = FindAsByNameDeepSearch<PlainLabel>(DecayDisplayLabelName);
@@ -266,9 +305,15 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void UpdateFromVoice()
         {
+            Utils.Assert(!isSettingKeybinding);
+
             namePropertyBindable.SetValueRaw(Voice.Name);
 
             frequencyPropertyBindable.SetValueRaw(Voice.CenterFrequency);
+
+            voiceFrontend.TryFindVoiceKeybinding(Voice, out Keys key);
+
+            KeybindingButton.Text = GetKeybindingUIButtonTextFromKey(key);
 
             attackPropertyBindable.SetValueRaw(Voice.Adsr.AttackSeconds);
             decayPropertyBindable.SetValueRaw(Voice.Adsr.DecaySeconds);
@@ -337,6 +382,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceCenterFrequency(Voice, frequency));
         }
 
+        private void SetKeybindingInternal(Keys key)
+        {
+            //voiceFrontend.SetVoiceKeybinding(key);
+        }
+
         private void SetAttackInternal(double attack)
         {
             game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceAttack(voice, attack));
@@ -386,11 +436,24 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                NumberMinValue=""{PolyphonicSynthesizer.CenterFrequencyRange.Min}""
                NumberMaxValue=""{PolyphonicSynthesizer.CenterFrequencyRange.Max}""
                TreatAsScalarPercentage=""false""
-               Name=""{FrequencyTextFieldName}""/>   
+               Name=""{FrequencyTextFieldName}""/> 
+
+<!--Keybinding-->
+
+    <PlainLabel Position=""(5%, 21.25%)""
+                Size=""(25%, 12.5%)"" 
+                Text=""Keybinding:"" 
+                FitText=""false"" 
+                GrowWithText=""true"" 
+                Name=""{KeybindingLabelName}""/>
+    <TextButton Position=""(28%, 21.25%)"" 
+                Size=""(30%, 12.5%)""
+                Alignment=""Center""
+                Name=""{KeybindingButtonName}""/>
 
 <!--ADSR-->
 
-    <Drawer Position=""(5%, 21.25%)"" 
+    <Drawer Position=""(5%, 38.75%)"" 
             Size=""(30%, 12.5%)"" 
             CoverText=""ADSR""
             Name=""{AdsrDrawerName}"">
@@ -461,10 +524,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
     </Drawer>
 
-    <VoiceMixControlGroup Position=""(5%, 38.75%)""
+    <VoiceMixControlGroup Position=""(5%, 56%)""
                           Size=""(90%, 20%)""/>
 
-    <Drawer Position=""(5%, 64%)"" 
+    <Drawer Position=""(5%, 81.25%)"" 
             Size=""(30%, 12.5%)"" 
             CoverText=""Oscillators""
             Name=""{OscillatorsDrawerName}"">
@@ -491,18 +554,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             float verticalSpacing_Percent = oscillatorsDrawerChildSize_Percent.Y + oscillatorsVerticalDrawerSpacing_Percent;
             float currentPositionY_Percent = drawerBeginY_Percent;
-            //float verticalSpacing_Percent = 50f;
-            //float currentPositionY_Percent = 60f;
 
             StringBuilder stringBuilder = new StringBuilder();
 
             for (int index = 0; index < Voice.Oscillators.Count; index++)
             {
-                /*string oscillatorXml = $@"<VoiceOscillatorControlGroup 
-                                           Position=""(5%, {currentPositionY_Percent}%)"" 
-                                           Size=""(90%, 50%)""
-                                           Style=""DrawerStyle""/>";*/
-
                 string oscillatorXml = GetOscillatorUIXml(currentPositionY_Percent);
 
                 stringBuilder.Append(oscillatorXml);
@@ -562,6 +618,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private const string FrequencyDisplayLabelName = "FrequencyDisplayLabel";
         private const string FrequencyTextFieldName = "FrequencyTextField";
 
+        private const string KeybindingLabelName = "KeybindingLabel";
+        private const string KeybindingButtonName = "KeybindingButton";
+
         private const string AdsrDrawerName = "AdsrDrawer";
 
         private const string AttackDisplayLabelName = "AttackDisplayLabel";
@@ -578,6 +637,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private const string AddOscillatorButtonName = "AddOscillatorButton";
 
+        private const string EMPTY_KEYBINDING_DISPLAY_STRING = "Empty";
+
         private class VoiceMixControlGroupFactory : UIXmlParser.TypeFactory
         {
             public VoiceMixControlGroupFactory() : base("VoiceMixControlGroup")
@@ -585,7 +646,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             }
 
-            public override Widget Create(UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
             {
                 return new VoiceMixControlGroup(position, size,
                                                 game: uiManager.Game);
@@ -599,11 +660,122 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             }
 
-            public override Widget Create(UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
             {
                 return new VoiceOscillatorControlGroup(position, size,
                                                        uiManager: uiManager);
             }
+        }
+
+        private void ActivateKeybindingSetting()
+        {
+            isSettingKeybinding = true;
+
+            KeybindingButton.AddCaptureListener(uiKeybindingInputSetterListener);
+
+            activatedKeybindingPreviousText = KeybindingButton.Text;
+
+            string newButtonText = "Press a key";
+
+            KeybindingButton.Text = newButtonText;
+        }
+
+        private void DeactivateAndSetKeybinding(Keys key)
+        {
+            SetKeybinding(key);
+
+            KeybindingButton.Text = GetKeybindingUIButtonTextFromKey(key);
+
+            ResetActivation(setButtonPreviousText: false);
+        }
+
+        private void ResetActivation(bool setButtonPreviousText)
+        {
+            activatedBindingIsEmpty = false;
+
+            if (setButtonPreviousText)
+            {
+                KeybindingButton.Text = activatedKeybindingPreviousText;
+            }
+
+            activatedKeybindingPreviousText = null;
+
+            KeybindingButton.RemoveCaptureListener(uiKeybindingInputSetterListener);
+
+            isSettingKeybinding = false;
+        }
+
+        private void SetKeybinding(Keys key)
+        {
+            voiceFrontend.SetVoiceKeybinding(key, Voice);
+        }
+
+        private void InitUIKeybindingInputSetterListener()
+        {
+            uiKeybindingInputSetterListener = new InputListener
+            {
+                KeyEnter = delegate (InputEvent e, Keys key)
+                {
+                    e.HandleAndStop();
+
+                    ResetActivation(setButtonPreviousText: true);
+                },
+
+                KeyDown = delegate (InputEvent e, Keys key)
+                {
+                    e.HandleAndStop();
+
+                    if (e.Keyboard.IsRepeat)
+                    {
+                        return;
+                    }
+
+                    if (key == Keys.Escape)
+                    {
+                        ResetActivation(setButtonPreviousText: true);
+
+                        return;
+                    }
+
+                    if (invalidKeybindingKeys.Contains(key))
+                    {
+                        return;
+                    }
+
+                    DeactivateAndSetKeybinding(key);
+                },
+
+                MouseDown = delegate (InputEvent e, float x, float y, MouseStates.Button button)
+                {
+                    e.HandleAndStop();
+                },
+
+                MouseUp = delegate (InputEvent e, float x, float y, MouseStates.Button button)
+                {
+                    e.HandleAndStop();
+                },
+
+                MouseDragged = delegate (InputEvent e, float previousX, float previousY, float x, float y, MouseStates.Button button)
+                {
+                    e.HandleAndStop();
+                }
+            };
+        }
+
+        private static string GetKeybindingUIButtonTextFromKey(Keys? key)
+        {
+            string bindingText;
+
+            if (key.HasValue)
+            {
+                bindingText = $"Key: [{key}]";
+            }
+            else
+            {
+                bindingText = EMPTY_KEYBINDING_DISPLAY_STRING;
+            }
+
+            return bindingText;
         }
     }
 }

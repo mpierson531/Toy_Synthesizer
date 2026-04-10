@@ -42,7 +42,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             Adapters.Add(new PreciseGroupLayoutAdapter());
 
-            UIXmlParser uiXmlParser = new UIXmlParser(uiManager);
+            UIXmlParser uiXmlParser = new UIXmlParser(uiManager.Game);
             uiXmlParser.AddTypeFactory(new Frontend.SliderDisplayWidgetFactory());
 
             string uiXml = GetUIXml();

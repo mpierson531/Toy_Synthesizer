@@ -59,7 +59,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             string uiXml = GetUIXml();
 
-            UIXmlParser.Parse(uiManager, uiXml, rootParent: this);
+            UIXmlParser.Parse(uiManager.Game, uiXml, rootParent: this);
 
             InitWidgets();
 

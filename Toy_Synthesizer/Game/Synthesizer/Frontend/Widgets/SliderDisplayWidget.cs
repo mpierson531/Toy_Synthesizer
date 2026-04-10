@@ -94,7 +94,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                                     resetButtonPosition: resetButtonPosition, 
                                     resetButtonSize:  resetButtonSize);
 
-            new UIXmlParser(uiManager).Parse(uiXml, rootParent: this);
+            new UIXmlParser(uiManager.Game).Parse(uiXml, rootParent: this);
 
             InitWidgets();
         }

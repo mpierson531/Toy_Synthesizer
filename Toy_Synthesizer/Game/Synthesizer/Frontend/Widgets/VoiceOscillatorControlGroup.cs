@@ -58,7 +58,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             string uiXml = GetUIXml();
 
-            UIXmlParser uiXmlParser = new UIXmlParser(uiManager);
+            UIXmlParser uiXmlParser = new UIXmlParser(uiManager.Game);
 
             uiXmlParser.CacheEnumType<WaveformType>();
 

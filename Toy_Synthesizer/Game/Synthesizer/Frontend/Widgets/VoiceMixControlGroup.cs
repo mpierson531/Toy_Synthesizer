@@ -49,7 +49,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             string uiXml = GetUIXml();
 
-            UIXmlParser xmlParser = new UIXmlParser(game.UIManager);
+            UIXmlParser xmlParser = new UIXmlParser(game);
             xmlParser.AddTypeFactory(new Frontend.SliderDisplayWidgetFactory());
 
             xmlParser.Parse(uiXml, rootParent: this);

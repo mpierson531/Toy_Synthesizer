@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -22,6 +23,7 @@ using Toy_Synthesizer.Game.UI;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 {
+    // TODO: Will need to rework keybinding stuff if I want to implement multi-key keybindings
     public class VoiceFrontend
     {
         public const double DEFAULT_SHIFT_SEMITONE_AMOUNT = 12.0;
@@ -162,15 +164,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
         public bool KeyDown(Keys key, bool isRepeat, float holdTime)
         {
-            if (!isRepeat && keyVoiceBindings.TryGetValue(key, out ViewableList<Voice> voices))
+            if (!isRepeat && TryTurnVoicesOn(key))
             {
-                for (int index = 0; index < voices.Count; index++)
-                {
-                    AudioSourceCommand voiceOnCommand = SynthesizerCommands.VoiceOn(voices[index]);
-
-                    game.DSP.SendAudioSourceCommand(game.Synthesizer, voiceOnCommand);
-                }
-
                 return true;
             }
 
@@ -197,15 +192,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
         public bool KeyUp(Keys key)
         {
-            if (keyVoiceBindings.TryGetValue(key, out ViewableList<Voice> voices))
-            {
-                for (int index = 0; index < voices.Count; index++)
-                {
-                    AudioSourceCommand voiceOffCommand = SynthesizerCommands.VoiceOff(voices[index]);
-
-                    game.DSP.SendAudioSourceCommand(game.Synthesizer, voiceOffCommand);
-                }
-            }
+            // Even if TryTurnVoiceOff is successful here, not returning.
+            TryTurnVoicesOff(key);
 
             if (key == Keys.LeftShift && !game.Geo.Input.keyboard.IsKeyDown(Keys.RightShift)
                 || key == Keys.RightShift && !game.Geo.Input.keyboard.IsKeyDown(Keys.LeftShift))
@@ -230,7 +218,51 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             return false;
         }
 
-        public void AddVoiceKeyBinding(Keys key, Voice voice)
+        private bool TryTurnVoicesOn(Keys key)
+        {
+            if (keyVoiceBindings.TryGetValue(key, out ViewableList<Voice> voices))
+            {
+                for (int index = 0; index < voices.Count; index++)
+                {
+                    TurnVoiceOn(voices[index]);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryTurnVoicesOff(Keys key)
+        {
+            if (keyVoiceBindings.TryGetValue(key, out ViewableList<Voice> voices))
+            {
+                for (int index = 0; index < voices.Count; index++)
+                {
+                    TurnVoiceOff(voices[index]);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private void TurnVoiceOn(Voice voice)
+        {
+            AudioSourceCommand voiceOnCommand = SynthesizerCommands.VoiceOn(voice);
+
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, voiceOnCommand);
+        }
+
+        private void TurnVoiceOff(Voice voice)
+        {
+            AudioSourceCommand voiceOffCommand = SynthesizerCommands.VoiceOff(voice);
+
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, voiceOffCommand);
+        }
+
+        /*public void AddVoiceKeybinding(Keys key, Voice voice)
         {
             if (keyVoiceBindings.TryGetValue(key, out ViewableList<Voice> currentKeyVoices))
             {
@@ -240,6 +272,53 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             {
                 keyVoiceBindings.Add(key, new ViewableList<Voice>(voice));
             }
+
+            if (game.Geo.Input.keyboard.IsKeyDown(key))
+            {
+                TryTurnVoiceOn(key);
+            }
+        }*/
+
+        public void SetVoiceKeybinding(Keys key, Voice voice)
+        {
+            foreach((Keys existingKey, ViewableList<Voice> existingKeybindingVoices) in keyVoiceBindings)
+            {
+                if (existingKeybindingVoices.Remove(voice))
+                {
+                    TurnVoiceOff(voice);
+                }
+            }
+
+            if (keyVoiceBindings.TryGetValue(key, out ViewableList<Voice> currentKeyVoices))
+            {
+                currentKeyVoices.Add(voice);
+            }
+            else
+            {
+                keyVoiceBindings.Add(key, new ViewableList<Voice>(voice));
+            }
+
+            if (game.Geo.Input.keyboard.IsKeyDown(key))
+            {
+                TurnVoiceOn(voice);
+            }
+        }
+
+        public bool TryFindVoiceKeybinding(Voice voice, out Keys key)
+        {
+            foreach ((Keys existingKey, ViewableList<Voice> existingKeybindingVoices) in keyVoiceBindings)
+            {
+                if (existingKeybindingVoices.Contains(voice))
+                {
+                    key = existingKey;
+
+                    return true;
+                }
+            }
+
+            key = Keys.None;
+
+            return false;
         }
 
         public void InitUI(UIManager uiManager)

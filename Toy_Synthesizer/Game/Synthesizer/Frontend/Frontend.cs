@@ -23,7 +23,7 @@ using Toy_Synthesizer.Game.UI;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 {
-    // TODO: Implement adding/removing voices and oscillators.
+    // TODO: Implement adding/removing voices.
     public class Frontend
     {
         private readonly UIXmlParser uiXmlParser;
@@ -43,7 +43,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         {
             this.game = game;
 
-            uiXmlParser = new UIXmlParser(game.UIManager);
+            uiXmlParser = new UIXmlParser(game);
 
             voiceFrontend = new VoiceFrontend(game, uiXmlParser);
 
@@ -512,7 +512,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             }
 
-            public override Widget Create(UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
             {
                 if (!UIXmlParser.TryGetDoubleNumberRangeAndDefaultValue(attributes,
                                                                         out NumberRange<double>? range,
@@ -606,9 +606,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             }
 
-            public override Widget Create(UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
             {
-                return new VoiceGroup(position, size, 
+                return new VoiceGroup(game.SynthesizerFrontend.VoiceFrontend, position, size, 
                                       voice: null, 
                                       game: uiManager.Game);
             }
@@ -621,7 +621,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             }
 
-            public override Widget Create(UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
             {
                 return new MasterVolumeControlGroup(position, size, uiManager: uiManager);
             }
@@ -634,7 +634,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             }
 
-            public override Widget Create(UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
             {
                 return new GlobalGainControlGroup(position, size, uiManager: uiManager);
             }
@@ -647,7 +647,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             }
 
-            public override Widget Create(UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
             {
                 return new GlobalPanControlGroup(position, size, uiManager: uiManager);
             }
@@ -660,7 +660,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             }
 
-            public override Widget Create(UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
             {
                 return new GlobalVoiceSemitonePitchShiftControlGroup(position, size, uiManager: uiManager);
             }
@@ -673,7 +673,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             }
 
-            public override Widget Create(UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
             {
                 return new RecordingControlGroup(position, size, uiManager: uiManager);
             }
