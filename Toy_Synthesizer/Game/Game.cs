@@ -653,6 +653,20 @@ namespace Toy_Synthesizer.Game
             return getErrorMessagePrefix is not null ? getErrorMessagePrefix() + baseMessage : baseMessage;
         }
 
+        public void BeginInputEvents()
+        {
+            uiStage.BeginInputEvents();
+
+            SynthesizerFrontend.BeginInputEvents();
+        }
+
+        public void EndInputEvents()
+        {
+            uiStage.EndInputEvents();
+
+            SynthesizerFrontend.EndInputEvents();
+        }
+
         public bool KeyDown(Keys key, bool isRepeat, float holdTime)
         {
             if (uiStage.KeyDown(key, isRepeat, holdTime))

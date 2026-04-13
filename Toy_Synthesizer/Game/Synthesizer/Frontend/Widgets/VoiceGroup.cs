@@ -6,13 +6,13 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 
 using GeoLib;
+using GeoLib.GeoInput;
 using GeoLib.GeoGraphics;
 using GeoLib.GeoGraphics.Slicing;
 using GeoLib.GeoGraphics.UI;
 using GeoLib.GeoGraphics.UI.Data;
 using GeoLib.GeoGraphics.UI.Data.Generic;
 using GeoLib.GeoGraphics.UI.Widgets;
-using GeoLib.GeoInput;
 using GeoLib.GeoMaths;
 using GeoLib.GeoShapes;
 using GeoLib.GeoUtils;
@@ -28,7 +28,8 @@ using Toy_Synthesizer.Game.UI;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
-    // TODO: Keybinding stuff will need to be reworked if I want to support multi-key keybindings
+    // TODO: Improve keybinding stuff.
+    // TODO: Implement more flexible keybindings (like multiple possible key combos; I'm thinking a drawer where you can add or remove keybindings and change AND/OR for the keybinding)
     public class VoiceGroup : ScrollPane
     {
         internal Game game;
@@ -63,8 +64,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private PropertyBindable<double> frequencyPropertyBindable;
         private ConvertingPropertyBinding<double, string> frequencyBinding;
-
-        private PropertyBindable<Keys> voiceKeybindingPropertyBindable;
 
         private PropertyBindable<double> attackPropertyBindable;
         private ConvertingPropertyBinding<double, string> attackBinding;
@@ -104,6 +103,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private IListener addOscillatorsButtonTooltip;
 
         private bool isSettingKeybinding;
+        private readonly ViewableList<Keys> pendingKeybindingKeys;
         private InputListener uiKeybindingInputSetterListener;
         private readonly ImmutableArray<Keys> invalidKeybindingKeys;
         private bool activatedBindingIsEmpty;
@@ -133,6 +133,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                 Keys.Escape
             });
 
+            pendingKeybindingKeys = new ViewableList<Keys>();
+
             InitPropertyBindables();
 
             InitUIKeybindingInputSetterListener();
@@ -161,13 +163,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             sustainPropertyBindable = new PropertyBindable<double>("Sustain");
             releasePropertyBindable = new PropertyBindable<double>("Release");
 
-            voiceKeybindingPropertyBindable = new PropertyBindable<Keys>("Keybinding");
-
             namePropertyBindable.OnValueChangedTyped += SetVoiceNameInternal;
 
             frequencyPropertyBindable.OnValueChangedTyped += SetFrequencyInternal;
-
-            voiceKeybindingPropertyBindable.OnValueChangedTyped += SetKeybindingInternal;
 
             attackPropertyBindable.OnValueChangedTyped += SetAttackInternal;
             decayPropertyBindable.OnValueChangedTyped += SetDecayInternal;
@@ -311,7 +309,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             frequencyPropertyBindable.SetValueRaw(Voice.CenterFrequency);
 
-            voiceFrontend.TryFindVoiceKeybinding(Voice, out Keys key);
+            voiceFrontend.TryFindVoiceKeybinding(Voice, out KeyBinding key);
 
             KeybindingButton.Text = GetKeybindingUIButtonTextFromKey(key);
 
@@ -380,11 +378,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private void SetFrequencyInternal(double frequency)
         {
             game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.SetVoiceCenterFrequency(Voice, frequency));
-        }
-
-        private void SetKeybindingInternal(Keys key)
-        {
-            //voiceFrontend.SetVoiceKeybinding(key);
         }
 
         private void SetAttackInternal(double attack)
@@ -680,16 +673,33 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             KeybindingButton.Text = newButtonText;
         }
 
-        private void DeactivateAndSetKeybinding(Keys key)
+        private void DeactivateAndSetKeybinding()
         {
-            SetKeybinding(key);
+            if (pendingKeybindingKeys.IsEmpty)
+            {
+                SetKeybindingInternal(null);
 
-            KeybindingButton.Text = GetKeybindingUIButtonTextFromKey(key);
+                KeybindingButton.Text = EMPTY_KEYBINDING_DISPLAY_STRING;
 
-            ResetActivation(setButtonPreviousText: false);
+                ResetKeybindingActivation(setButtonPreviousText: false);
+
+                return;
+            }
+
+            // For now, making all keys required (KeyComboMode.AND), but I want to implement more options in the future.
+
+            KeyBinding.Key[] keys = pendingKeybindingKeys.ProcessToArray(key => new KeyBinding.Key(key, PressMode.Down, KeyBinding.KeyComboMode.AND));
+
+            KeyBinding keybinding = new KeyBinding(modifiers: null, keys: keys, holdDelay: 0, repeatDelay: 0, respectRepeatDelay: false);
+
+            SetKeybindingInternal(keybinding);
+
+            KeybindingButton.Text = GetKeybindingUIButtonTextFromKey(keybinding);
+
+            ResetKeybindingActivation(setButtonPreviousText: false);
         }
 
-        private void ResetActivation(bool setButtonPreviousText)
+        private void ResetKeybindingActivation(bool setButtonPreviousText)
         {
             activatedBindingIsEmpty = false;
 
@@ -702,12 +712,14 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             KeybindingButton.RemoveCaptureListener(uiKeybindingInputSetterListener);
 
+            pendingKeybindingKeys.Clear();
+
             isSettingKeybinding = false;
         }
 
-        private void SetKeybinding(Keys key)
+        private void SetKeybindingInternal(KeyBinding keybinding)
         {
-            voiceFrontend.SetVoiceKeybinding(key, Voice);
+            voiceFrontend.SetVoiceKeybinding(keybinding, Voice);
         }
 
         private void InitUIKeybindingInputSetterListener()
@@ -718,7 +730,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                 {
                     e.HandleAndStop();
 
-                    ResetActivation(setButtonPreviousText: true);
+                    DeactivateAndSetKeybinding();
                 },
 
                 KeyDown = delegate (InputEvent e, Keys key)
@@ -732,7 +744,16 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
                     if (key == Keys.Escape)
                     {
-                        ResetActivation(setButtonPreviousText: true);
+                        ResetKeybindingActivation(setButtonPreviousText: true);
+
+                        return;
+                    }
+
+                    if (key == Keys.Back)
+                    {
+                        pendingKeybindingKeys.Clear();
+
+                        DeactivateAndSetKeybinding();
 
                         return;
                     }
@@ -742,7 +763,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                         return;
                     }
 
-                    DeactivateAndSetKeybinding(key);
+                    pendingKeybindingKeys.Add(key);
+                },
+
+                KeyUp = delegate(InputEvent e, Keys key)
+                {
+                    e.HandleAndStop();
                 },
 
                 MouseDown = delegate (InputEvent e, float x, float y, MouseStates.Button button)
@@ -762,13 +788,27 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             };
         }
 
-        private static string GetKeybindingUIButtonTextFromKey(Keys? key)
+        private static string GetKeybindingUIButtonTextFromKey(KeyBinding keybinding)
         {
             string bindingText;
 
-            if (key.HasValue)
+            if (keybinding is not null)
             {
-                bindingText = $"Key: [{key}]";
+                bindingText = "Keys: [";
+
+                for (int index = 0; index < keybinding.keys.Length; index++)
+                {
+                    KeyBinding.Key currentKey = keybinding.keys[index];
+
+                    bindingText += currentKey.key.ToString();
+
+                    if (index + 1 < keybinding.keys.Length)
+                    {
+                        bindingText += " + ";
+                    }
+                }
+
+                bindingText += "]";
             }
             else
             {

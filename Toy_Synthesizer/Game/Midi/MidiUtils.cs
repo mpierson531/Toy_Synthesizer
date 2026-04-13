@@ -15,21 +15,75 @@ namespace Toy_Synthesizer.Game.Midi
         public const int A4_CENTER_NOTE = 69;
         public const double A4_CENTER_FREQUENCY = 440.0;
 
+        public const StringComparison DEFAULT_STRING_COMPARISON_TYPE = StringComparison.OrdinalIgnoreCase;
+
         public static readonly ImmutableArray<MidiNote> AllMidiNotes;
         public static readonly ImmutableArray<string> AllMidiNoteNames;
+        public static readonly ImmutableArray<string> AllMidiNoteNames_Shorthand;
 
         static MidiUtils()
         {
             AllMidiNotes = new ImmutableArray<MidiNote>(Enum.GetValues<MidiNote>());
 
-            string[] allMidiNoteNames = new string[AllMidiNotes.Count];
+            string[] allMidiNoteNames_Array = new string[AllMidiNotes.Count];
+            string[] allMidiNoteNames_Shorthand_Array = new string[AllMidiNotes.Count];
 
             for (int index = 0; index < AllMidiNotes.Count; index++)
             {
-                allMidiNoteNames[index] = AllMidiNotes[index].ToString();
+                allMidiNoteNames_Array[index] = AllMidiNotes[index].ToString();
             }
 
-            AllMidiNoteNames = new ImmutableArray<string>(allMidiNoteNames);
+            AllMidiNoteNames = new ImmutableArray<string>(allMidiNoteNames_Array);
+
+            // TODO: Maybe implement flat accidentals rather than only sharps.
+
+            for (int index = 0; index < AllMidiNotes.Count; index++)
+            {
+                string currentNoteName = AllMidiNoteNames[index];
+
+                char letterName = currentNoteName[0];
+
+                int noteNameOctaveBeginIndex;
+
+                if (currentNoteName.Contains("sharp", StringComparison.OrdinalIgnoreCase))
+                {
+                    noteNameOctaveBeginIndex = currentNoteName.IndexOf("sharp", StringComparison.OrdinalIgnoreCase) + "sharp".Length;
+                }
+                else
+                {
+                    noteNameOctaveBeginIndex = 1;
+                }
+
+                string octaveName = currentNoteName.Substring(noteNameOctaveBeginIndex);
+
+                bool isMinusOctave = currentNoteName.Contains("minus", StringComparison.OrdinalIgnoreCase);
+
+                string shorthand;
+
+                if (currentNoteName.Contains("sharp", StringComparison.OrdinalIgnoreCase))
+                {
+                    shorthand = $"{letterName}#";
+                }
+                else
+                {
+                    shorthand = $"{letterName}";
+                }
+
+                if (isMinusOctave)
+                {
+                    string minusOctave = octaveName.Substring("minus".Length);
+
+                    shorthand += $"-{minusOctave}";
+                }
+                else
+                {
+                    shorthand += octaveName;
+                }
+
+                allMidiNoteNames_Shorthand_Array[index] = shorthand;
+            }
+
+            AllMidiNoteNames_Shorthand = new ImmutableArray<string>(allMidiNoteNames_Shorthand_Array);
         }
 
         public static MidiNote ShiftOctave(MidiNote note, int targetOctave)
@@ -97,20 +151,32 @@ namespace Toy_Synthesizer.Game.Midi
         // Default string comparison tyhpe is OrdinalIgnoreCase.
         public static bool TryMatchNoteName(string name, out MidiNote note,
                                             bool trim = true,
-                                            StringComparison stringComparisonType = StringComparison.OrdinalIgnoreCase)
+                                            StringComparison stringComparisonType = DEFAULT_STRING_COMPARISON_TYPE)
         {
             if (trim)
             {
                 name = name.Trim();
             }
 
-            for (int index = 0; index < AllMidiNotes.Count; index++)
+            for (int nameIndex = 0; nameIndex < AllMidiNotes.Count; nameIndex++)
             {
-                string currentNote = AllMidiNoteNames[index];
+                string currentNote = AllMidiNoteNames[nameIndex];
 
                 if (name.Equals(currentNote, stringComparisonType))
                 {
-                    note = AllMidiNotes[index];
+                    note = AllMidiNotes[nameIndex];
+
+                    return true;
+                }
+            }
+
+            for (int shorthandNameIndex = 0; shorthandNameIndex < AllMidiNotes.Count; shorthandNameIndex++)
+            {
+                string currentNote = AllMidiNoteNames_Shorthand[shorthandNameIndex];
+
+                if (name.Equals(currentNote, stringComparisonType))
+                {
+                    note = AllMidiNotes[shorthandNameIndex];
 
                     return true;
                 }

@@ -258,8 +258,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             return true;
         }
 
+        // In VoiceOn and VoiceOff, the voice should already be added, ideally. It shouldn't be catastrophic if not though.
+
         // Begins voice.
-        // voice should already be added before this.
         private void VoiceOn(Voice voice)
         {
             AddOnVoice(voice, removeFromOff: true);
@@ -269,7 +270,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         }
 
         // Initiates the ending of voice.
-        // voice should already be added before this.
         private void VoiceOff(Voice voice)
         {
             voice.Adsr.NoteOff();

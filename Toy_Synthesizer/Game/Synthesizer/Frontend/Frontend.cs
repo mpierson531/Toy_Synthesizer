@@ -145,6 +145,16 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             console.InitUI();
         }
 
+        public void BeginInputEvents()
+        {
+            voiceFrontend.BeginInputEvents();
+        }
+
+        public void EndInputEvents()
+        {
+            voiceFrontend.EndInputEvents();
+        }
+
         public bool KeyDown(Keys key, bool isRepeat, float holdTime)
         {
             if (!isRepeat && key == Keys.OemTilde)
