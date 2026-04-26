@@ -6,9 +6,9 @@ using System.Text;
 using System.Threading.Tasks;
 
 using GeoLib;
-using GeoLib.GeoInput;
 using GeoLib.GeoGraphics.UI;
 using GeoLib.GeoGraphics.UI.Widgets;
+using GeoLib.GeoInput;
 using GeoLib.GeoMaths;
 using GeoLib.GeoShapes;
 using GeoLib.GeoUtils;
@@ -31,13 +31,20 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         public const double DEFAULT_SHIFT_SEMITONE_AMOUNT = 12.0;
         public const double DEFAULT_CONTROL_SEMITONE_AMOUNT = -12.0;
         public static readonly NumberRange<double> ShiftAndControlSemitoneRange;
-        private static readonly Dictionary<KeyBinding, ImmutableArray<Voice>> defaultKeyVoiceBindings;
+        private static readonly Dictionary<Voice, KeyBinding> defaultKeyVoiceBindings;
+        public static readonly ImmutableArray<Keys> InvalidVoiceKeybindingKeys;
 
         static VoiceFrontend()
         {
             ShiftAndControlSemitoneRange = NumberRange<double>.From(-24.0, 24.0);
 
             defaultKeyVoiceBindings = GetDefaultKeyVoiceBindings();
+
+            InvalidVoiceKeybindingKeys = new ImmutableArray<Keys>(new Keys[]
+            {
+                Keys.Enter,
+                Keys.Escape
+            });
         }
 
         private readonly Game game;
@@ -58,8 +65,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         private double? currentShiftShiftedSemitoneAmount;
         private double? currentControlShiftedSemitoneAmount;
 
-        private readonly Dictionary<KeyBinding, ViewableList<Voice>> voiceKeybindings;
-        private readonly Dictionary<KeyBinding, bool> voiceKeybindingsInputHandled;
+        private readonly Dictionary<Voice, KeyBinding> voiceKeybindings;
+        private readonly Dictionary<Voice, bool> voiceKeybindingsInputHandled;
 
         private readonly string[] utilityActionNames;
         private readonly Action[] utilityActions;
@@ -127,31 +134,25 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             ShiftSemitoneAmount = DEFAULT_SHIFT_SEMITONE_AMOUNT;
             ControlSemitoneAmount = DEFAULT_CONTROL_SEMITONE_AMOUNT;
 
-            voiceKeybindings = new Dictionary<KeyBinding, ViewableList<Voice>>(defaultKeyVoiceBindings.Count);
-            voiceKeybindingsInputHandled = new Dictionary<KeyBinding, bool>();
+            voiceKeybindings = new Dictionary<Voice, KeyBinding>(defaultKeyVoiceBindings.Count);
+            voiceKeybindingsInputHandled = new Dictionary<Voice, bool>();
 
-            foreach (KeyValuePair<KeyBinding, ImmutableArray<Voice>> binding in defaultKeyVoiceBindings)
+            foreach ((Voice voice, KeyBinding keybinding) in defaultKeyVoiceBindings)
             {
-                Voice[] voicesCopy = binding.Value.ToArray(voice => voice.Copy(deepCopy: true));
+                Voice voiceCopy = voice.Copy(deepCopy: true);
 
-                voiceKeybindings.Add(binding.Key, new ViewableList<Voice>(voicesCopy));
+                voiceKeybindings.Add(voiceCopy, keybinding);
 
-                voiceKeybindingsInputHandled.Add(binding.Key, false);
+                voiceKeybindingsInputHandled.Add(voiceCopy, false);
             }
 
-            foreach (ViewableList<Voice> voices in voiceKeybindings.Values)
+            foreach (Voice voice in voiceKeybindings.Keys)
             {
-                for (int index = 0; index < voices.Count; index++)
-                {
-                    voices[index].LPF = new StateVariableLPF(20000, 0.25, game.Synthesizer.SampleRate);
-                }
+                voice.LPF = new StateVariableLPF(20000, 0.25, game.Synthesizer.SampleRate);
 
-                for (int index = 0; index < voices.Count; index++)
-                {
-                    AudioSourceCommand addVoiceCommand = SynthesizerCommands.AddVoice(voices[index]);
+                AudioSourceCommand addVoiceCommand = SynthesizerCommands.AddVoice(voice);
 
-                    game.Synthesizer.SendCommand(ref addVoiceCommand);
-                }
+                game.Synthesizer.SendCommand(ref addVoiceCommand);
             }
 
             // Distribute the oscillator amplitudes equally, to ensure a decent volume.
@@ -239,23 +240,20 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         {
             bool anyTurnedOn = false;
 
-            foreach ((KeyBinding keybinding, ViewableList<Voice> voices) in voiceKeybindings)
+            foreach ((Voice voice, KeyBinding keybinding) in voiceKeybindings)
             {
                 GeoDebug.Assert(!keybinding.RespectRepeatDelay && keybinding.RepeatDelay == 0f && keybinding.HoldDelay == 0f);
 
-                if (!voiceKeybindingsInputHandled[keybinding] && keybinding.IsPressed(game.Geo.Input.keyboard, key))
+                if (!voiceKeybindingsInputHandled[voice] && keybinding.IsPressed(game.Geo.Input.keyboard, key))
                 {
-                    for (int voiceIndex = 0; voiceIndex < voices.Count; voiceIndex++)
-                    {
-                        TurnVoiceOn(voices[voiceIndex]);
-                    }
+                    TurnVoiceOn(voice);
 
                     if (!anyTurnedOn)
                     {
                         anyTurnedOn = true;
                     }
 
-                    voiceKeybindingsInputHandled[keybinding] = true;
+                    voiceKeybindingsInputHandled[voice] = true;
                 }
             }
 
@@ -266,28 +264,27 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         {
             bool anyTurnedOff = false;
 
-            foreach ((KeyBinding keybinding, ViewableList<Voice> voices) in voiceKeybindings)
+            foreach ((Voice voice, KeyBinding keybinding) in voiceKeybindings)
             {
                 GeoDebug.Assert(!keybinding.RespectRepeatDelay && keybinding.RepeatDelay == 0f && keybinding.HoldDelay == 0f);
 
                 if (keybinding.IsPressed(game.Geo.Input.keyboard, key))
                 {
-                    if (!voiceKeybindingsInputHandled[keybinding])
+                    if (!voiceKeybindingsInputHandled[voice])
                     {
-                        voiceKeybindingsInputHandled[keybinding] = true;
+                        voiceKeybindingsInputHandled[voice] = true;
                     }
 
                     continue;
                 }
 
-                for (int keyIndex = 0; keyIndex < keybinding.keys.Length; keyIndex++)
+                ReadOnlySpan<KeyBinding.Key> keybindingKeysSpan = keybinding.KeysSpan;
+
+                for (int keyIndex = 0; keyIndex < keybindingKeysSpan.Length; keyIndex++)
                 {
-                    if (keybinding.keys[keyIndex].key == key)
+                    if (keybindingKeysSpan[keyIndex].key == key)
                     {
-                        for (int voiceIndex = 0; voiceIndex < voices.Count; voiceIndex++)
-                        {
-                            TurnVoiceOff(voices[voiceIndex]);
-                        }
+                        TurnVoiceOff(voice);
 
                         if (!anyTurnedOff)
                         {
@@ -296,7 +293,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
                     }
                 }
 
-                voiceKeybindingsInputHandled[keybinding] = false;
+                voiceKeybindingsInputHandled[voice] = false;
             }
 
             return anyTurnedOff;
@@ -316,15 +313,15 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             game.DSP.SendAudioSourceCommand(game.Synthesizer, voiceOffCommand);
         }
 
-        public void SetVoiceKeybinding(KeyBinding keybinding, Voice voice)
+        public void SetVoiceKeybinding(Voice voice, KeyBinding keybinding)
         {
-            foreach ((KeyBinding existingKeybinding, ViewableList<Voice> existingKeybindingVoices) in voiceKeybindings)
+            foreach ((Voice existingVoice, _) in voiceKeybindings)
             {
-                if (existingKeybindingVoices.Remove(voice))
+                if (existingVoice == voice)
                 {
                     TurnVoiceOff(voice);
 
-                    voiceKeybindings.Remove(existingKeybinding);
+                    voiceKeybindings.Remove(existingVoice);
 
                     break;
                 }
@@ -335,42 +332,20 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
                 return;
             }
 
-            if (voiceKeybindings.TryGetValue(keybinding, out ViewableList<Voice> currentKeyVoices))
-            {
-                currentKeyVoices.Add(voice);
-
-                voiceKeybindingsInputHandled[keybinding] = false;
-            }
-            else
-            {
-                voiceKeybindings.Add(keybinding, new ViewableList<Voice>(voice));
-
-                voiceKeybindingsInputHandled.Add(keybinding, false);
-            }
+            voiceKeybindings[voice] = keybinding;
+            voiceKeybindingsInputHandled[voice] = false;
 
             if (keybinding.IsPressed(game.Geo.Input.keyboard))
             {
                 TurnVoiceOn(voice);
 
-                voiceKeybindingsInputHandled[keybinding] = true;
+                voiceKeybindingsInputHandled[voice] = true;
             }
         }
 
         public bool TryFindVoiceKeybinding(Voice voice, out KeyBinding keybinding)
         {
-            foreach ((KeyBinding existingKeybinding, ViewableList<Voice> existingKeybindingVoices) in voiceKeybindings)
-            {
-                if (existingKeybindingVoices.Contains(voice))
-                {
-                    keybinding = existingKeybinding;
-
-                    return true;
-                }
-            }
-
-            keybinding = null;
-
-            return false;
+            return voiceKeybindings.TryGetValue(voice, out keybinding);
         }
 
         public void InitUI(UIManager uiManager)
@@ -523,7 +498,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             }
         }*/
 
-        private static Dictionary<KeyBinding, ImmutableArray<Voice>> GetDefaultKeyVoiceBindings()
+        private static Dictionary<Voice, KeyBinding> GetDefaultKeyVoiceBindings()
         {
             MidiNote startNote = MidiNote.C4;
 
@@ -532,7 +507,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             int startOctave = MidiUtils.GetOctave(startNote);
             int additionalLayerCount = 0;
 
-            ViewableList<ValueTuple<KeyBinding, ImmutableArray<Voice>>> voices = new ViewableList<ValueTuple<KeyBinding, ImmutableArray<Voice>>>();
+            ViewableList<ValueTuple<Voice, KeyBinding>> voices = new ViewableList<ValueTuple<Voice, KeyBinding>>();
 
             foreach (int offset in semitoneOffsets)
             {
@@ -549,25 +524,21 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
                     _ => throw new Exception("Bad semitone offset. This should never be reached!")
                 };
 
-                KeyBinding keybinding = new KeyBinding(modifiers: null, keys: new KeyBinding.Key[] { new KeyBinding.Key(key, PressMode.Down) },
-                                                       holdDelay: 0, 
-                                                       repeatDelay: 0, 
-                                                       respectRepeatDelay: false);
-
-                ViewableList<Voice> voiceList = new ViewableList<Voice>();
-
                 for (int octaveLayer = startOctave; octaveLayer < startOctave + 1 + additionalLayerCount; octaveLayer++)
                 {
+                    KeyBinding keybinding = new KeyBinding(modifiers: null, keys: new KeyBinding.Key[] { new KeyBinding.Key(key, PressMode.Down) },
+                                                       holdDelay: 0,
+                                                       repeatDelay: 0,
+                                                       respectRepeatDelay: false);
+
                     int noteValue = (octaveLayer + 1) * 12 + offset;
 
                     MidiNote midiNote = (MidiNote)noteValue;
 
-                    voiceList.Add(Voice.FromMidi(midiNote));
+                    Voice voice = Voice.FromMidi(midiNote);
+
+                    voices.Add((voice, keybinding));
                 }
-
-                ValueTuple<KeyBinding, ImmutableArray<Voice>> binding = (keybinding, new ImmutableArray<Voice>(voiceList.ToArray()));
-
-                voices.Add(binding);
             }
 
             return voices.ToDictionary(x => x.Item1, x => x.Item2);

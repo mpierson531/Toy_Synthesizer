@@ -71,19 +71,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             base.ParentChanged(previousParent, newParent);
 
-            parentVoiceGroup = FindParentVoiceGroup();
+            parentVoiceGroup = VoiceGroup.FindParentVoiceGroup(this);
 
             if (newParent is not null && parentVoiceGroup is null)
             {
                 throw new InvalidOperationException("No parent voice group found in hierarchy.");
             }
-        }
-
-        private VoiceGroup FindParentVoiceGroup()
-        {
-            GroupWidget voiceGroup = FindFirstAscendant(ascendant => ascendant is VoiceGroup);
-
-            return (VoiceGroup)voiceGroup;
         }
 
         internal void UpdateFromVoice()

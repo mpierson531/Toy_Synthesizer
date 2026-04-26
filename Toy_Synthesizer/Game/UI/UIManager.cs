@@ -1635,10 +1635,6 @@ namespace Toy_Synthesizer.Game.UI
                 ShowContainer = false,
                 ShowScrollButtons = false,
 
-                /*Normal = RenderData.SolidRectangle(ScrollBarOffColor, cornerRadius: ScrollbarCornerRadius),
-                Hovered = RenderData.SolidRectangle(ScrollBarHoverColor, cornerRadius: ScrollbarCornerRadius),
-                Down = RenderData.SolidRectangle(ScrollBarDownColor, cornerRadius: ScrollbarCornerRadius),*/
-
                 Normal = RenderData.Texture(TexMaker.WhitePixel, tint: ScrollBarOffColor),
                 Hovered = RenderData.Texture(TexMaker.WhitePixel, tint: ScrollBarHoverColor),
                 Down = RenderData.Texture(TexMaker.WhitePixel, tint: ScrollBarDownColor),
@@ -3366,7 +3362,8 @@ namespace Toy_Synthesizer.Game.UI
 
             Vec2f shiftDelta = Vec2f.Zero;
             float minDistance = float.MaxValue;
-            bool neighborFound = false;
+            bool needsSpacing = false;
+            bool allNeighborsHaveEqualPositions = true;
 
             Vec2f childPosition = child.Position;
             Vec2f childMax = childPosition + child.Size;
@@ -3382,82 +3379,119 @@ namespace Toy_Synthesizer.Game.UI
 
                 Vec2f currentStatePosition = state.widget.Position;
 
-                if (drawer.Direction == LayoutOrientation.Horizontal && GeoMath.GT_Precise(currentStatePosition.X, childPosition.X))
+                if (drawer.Direction == LayoutOrientation.Horizontal && GeoMath.GTE_Precise(currentStatePosition.X, childPosition.X))
                 {
+                    needsSpacing = true;
+
+                    if (GeoMath.Equals_Precise(currentStatePosition.X, childPosition.X))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        allNeighborsHaveEqualPositions = false;
+                    }
+
                     float dist = currentStatePosition.X - childMax.X;
 
                     if (dist < minDistance)
                     {
                         minDistance = dist;
-
-                        neighborFound = true;
                     }
                 }
-                else if (drawer.Direction == LayoutOrientation.Vertical && GeoMath.GT_Precise(currentStatePosition.Y, childPosition.Y))
+                else if (drawer.Direction == LayoutOrientation.Vertical && GeoMath.GTE_Precise(currentStatePosition.Y, childPosition.Y))
                 {
+                    needsSpacing = true;
+
+                    if (GeoMath.Equals_Precise(currentStatePosition.Y, childPosition.Y))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        allNeighborsHaveEqualPositions = false;
+                    }
+
                     float dist = currentStatePosition.Y - childMax.Y;
 
                     if (dist < minDistance)
                     {
                         minDistance = dist;
-
-                        neighborFound = true;
                     }
                 }
             }
 
-            if (neighborFound)
+            if (needsSpacing)
             {
                 if (drawer.Direction == LayoutOrientation.Horizontal)
                 {
-                    shiftDelta.X = child.Size.X + minDistance;
+                    shiftDelta.X = child.Size.X;
+
+                    if (!allNeighborsHaveEqualPositions)
+                    {
+                        shiftDelta.X += minDistance;
+                    }
                 }
                 else if (drawer.Direction == LayoutOrientation.Vertical)
                 {
-                    shiftDelta.Y = child.Size.Y + minDistance;
+                    shiftDelta.Y = child.Size.Y;
+
+                    if (!allNeighborsHaveEqualPositions)
+                    {
+                        shiftDelta.Y += minDistance;
+                    }
                 }
 
-                for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
+                ShiftDrawer_ChildAdded(drawer, child, shiftDelta);
+            }
+        }
+
+        public static void ShiftDrawer_ChildAdded(Drawer drawer, Widget child, Vec2f shiftDelta)
+        {
+            PreciseGroupLayoutAdapter drawerLayoutAdapter = drawer.Adapters.FindFirstOfType<PreciseGroupLayoutAdapter>();
+            ReadOnlySpan<PreciseGroupLayoutAdapter.WidgetState> drawerLayoutStates = drawerLayoutAdapter.GetWidgetStates();
+
+            Vec2f childPosition = child.Position;
+
+            for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
+            {
+                PreciseGroupLayoutAdapter.WidgetState state = drawerLayoutStates[i];
+
+                if (state.widget == child || state.widget == drawer.CoverButton)
                 {
-                    PreciseGroupLayoutAdapter.WidgetState state = drawerLayoutStates[i];
+                    continue;
+                }
 
-                    if (state.widget == child || state.widget == drawer.CoverButton)
-                    {
-                        continue;
-                    }
+                Vec2f currentStatePosition = state.widget.Position;
 
-                    Vec2f currentStatePosition = state.widget.Position;
+                bool needsShifted = (drawer.Direction == LayoutOrientation.Horizontal && GeoMath.GTE_Precise(currentStatePosition.X, childPosition.X)) ||
+                                   (drawer.Direction == LayoutOrientation.Vertical && GeoMath.GTE_Precise(currentStatePosition.Y, childPosition.Y));
 
-                    bool needsShifted = (drawer.Direction == LayoutOrientation.Horizontal && GeoMath.GTE_Precise(currentStatePosition.X, childPosition.X)) ||
-                                       (drawer.Direction == LayoutOrientation.Vertical && GeoMath.GTE_Precise(currentStatePosition.Y, childPosition.Y));
-
-                    if (needsShifted)
-                    {
-                        drawerLayoutAdapter.TrySetNormalizedBounds(state.widget,
-                                                                   PreciseGroupLayoutAdapter.GetNormalizedBounds(drawer, new AABB
-                                                                   {
-                                                                       Position = currentStatePosition + shiftDelta,
-                                                                       Size = state.widget.Size
-                                                                   }));
-                    }
+                if (needsShifted)
+                {
+                    drawerLayoutAdapter.TrySetNormalizedBounds(state.widget,
+                                                               PreciseGroupLayoutAdapter.GetNormalizedBounds(drawer, new AABB
+                                                               {
+                                                                   Position = currentStatePosition + shiftDelta,
+                                                                   Size = state.widget.Size
+                                                               }));
                 }
             }
         }
 
-        // TODO: Implement finding child closest to child, rather than first child.
         public static void ShiftDrawer_ChildRemoved(Drawer drawer, Widget child)
         {
-            // TODO: May need adjusted for horizontal layouts.
+            // Attempts to find spacing between removed child and closest child that was after the removed child (in terms of position).
 
             PreciseGroupLayoutAdapter drawerLayoutAdapter = drawer.Adapters.FindFirstOfType<PreciseGroupLayoutAdapter>();
-
             ReadOnlySpan<PreciseGroupLayoutAdapter.WidgetState> drawerLayoutStates = drawerLayoutAdapter.GetWidgetStates();
 
-            float detectedSpacing = 0f;
-
+            Vec2f shiftDelta = Vec2f.Zero;
+            float minDistance = float.MaxValue;
             bool spacingFound = false;
+            bool allNeighborsHaveEqualPositions = true;
 
-            // Attempts to find spacing between removed child and first child that was after the removed child (in terms of position).
+            Vec2f childPosition = child.Position;
 
             for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
             {
@@ -3468,58 +3502,101 @@ namespace Toy_Synthesizer.Game.UI
                     continue;
                 }
 
-                if (drawer.Direction == LayoutOrientation.Horizontal && otherChild.Position.X >= child.Position.X)
-                {
-                    detectedSpacing = otherChild.Position.X - child.GetMaxX();
+                Vec2f currentStatePosition = otherChild.Position;
 
+                if (drawer.Direction == LayoutOrientation.Horizontal && GeoMath.GTE_Precise(currentStatePosition.X, childPosition.X))
+                {
                     spacingFound = true;
 
-                    break;
+                    if (GeoMath.Equals_Precise(currentStatePosition.X, childPosition.X))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        allNeighborsHaveEqualPositions = false;
+                    }
+
+                    float dist = currentStatePosition.X - child.GetMaxX();
+
+                    if (dist < minDistance)
+                    {
+                        minDistance = dist;
+                    }
                 }
-                else if (drawer.Direction == LayoutOrientation.Vertical && otherChild.Position.Y >= child.Position.Y)
+                else if (drawer.Direction == LayoutOrientation.Vertical && GeoMath.GTE_Precise(currentStatePosition.Y, childPosition.Y))
                 {
-                    detectedSpacing = otherChild.Position.Y - child.GetMaxY();
-
                     spacingFound = true;
 
-                    break;
+                    if (GeoMath.Equals_Precise(currentStatePosition.Y, childPosition.Y))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        allNeighborsHaveEqualPositions = false;
+                    }
+
+                    float dist = currentStatePosition.Y - child.GetMaxY();
+
+                    if (dist < minDistance)
+                    {
+                        minDistance = dist;
+                    }
                 }
             }
 
             if (spacingFound)
             {
-                Vec2f shiftDelta = Vec2f.Zero;
-
                 if (drawer.Direction == LayoutOrientation.Horizontal)
                 {
-                    shiftDelta.X = child.Size.X + detectedSpacing;
+                    shiftDelta.X = child.Size.X;
+
+                    if (!allNeighborsHaveEqualPositions)
+                    {
+                        shiftDelta.X += minDistance;
+                    }
                 }
                 else if (drawer.Direction == LayoutOrientation.Vertical)
                 {
-                    shiftDelta.Y = child.Size.Y + detectedSpacing;
+                    shiftDelta.Y = child.Size.Y;
+
+                    if (!allNeighborsHaveEqualPositions)
+                    {
+                        shiftDelta.Y += minDistance;
+                    }
                 }
 
-                for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
+                ShiftDrawer_ChildRemoved(drawer, child, shiftDelta);
+            }
+        }
+
+        public static void ShiftDrawer_ChildRemoved(Drawer drawer, Widget child, Vec2f shiftDelta)
+        {
+            PreciseGroupLayoutAdapter drawerLayoutAdapter = drawer.Adapters.FindFirstOfType<PreciseGroupLayoutAdapter>();
+
+            ReadOnlySpan<PreciseGroupLayoutAdapter.WidgetState> drawerLayoutStates = drawerLayoutAdapter.GetWidgetStates();
+
+            for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
+            {
+                PreciseGroupLayoutAdapter.WidgetState state = drawerLayoutStates[i];
+
+                if (state.widget == drawer.CoverButton || state.widget == child)
                 {
-                    PreciseGroupLayoutAdapter.WidgetState state = drawerLayoutStates[i];
+                    continue;
+                }
 
-                    if (state.widget == drawer.CoverButton || state.widget == child)
-                    {
-                        continue;
-                    }
+                bool isAfter = (drawer.Direction == LayoutOrientation.Horizontal && GeoMath.GTE_Precise(state.widget.Position.X, child.Position.X)) ||
+                               (drawer.Direction == LayoutOrientation.Vertical && GeoMath.GTE_Precise(state.widget.Position.Y, child.Position.Y));
 
-                    bool isAfter = (drawer.Direction == LayoutOrientation.Horizontal && state.widget.Position.X > child.Position.X) ||
-                                   (drawer.Direction == LayoutOrientation.Vertical && state.widget.Position.Y > child.Position.Y);
-
-                    if (isAfter)
-                    {
-                        drawerLayoutAdapter.TrySetNormalizedBounds(state.widget,
-                                                                   PreciseGroupLayoutAdapter.GetNormalizedBounds(drawer, new AABB
-                                                                   {
-                                                                       Position = state.widget.Position - shiftDelta,
-                                                                       Size = state.widget.Size
-                                                                   }));
-                    }
+                if (isAfter)
+                {
+                    drawerLayoutAdapter.TrySetNormalizedBounds(state.widget,
+                                                               PreciseGroupLayoutAdapter.GetNormalizedBounds(drawer, new AABB
+                                                               {
+                                                                   Position = state.widget.Position - shiftDelta,
+                                                                   Size = state.widget.Size
+                                                               }));
                 }
             }
         }

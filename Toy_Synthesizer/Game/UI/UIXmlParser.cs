@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Numerics;
 using System.Xml.Linq;
 
@@ -15,8 +14,6 @@ using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
 using Microsoft.Xna.Framework;
-
-using static Toy_Synthesizer.Game.UI.UIXmlParser;
 
 namespace Toy_Synthesizer.Game.UI
 {
@@ -776,9 +773,9 @@ namespace Toy_Synthesizer.Game.UI
                                out yIsPercent);
         }
 
-        private static bool TryGetAlignment(ViewableList<XAttribute> attributes,
-                                            out Alignment alignment, 
-                                            Alignment defaultAlignment = Alignment.Left)
+        public static bool TryGetAlignment(ViewableList<XAttribute> attributes,
+                                           out Alignment alignment, 
+                                           Alignment defaultAlignment = Alignment.Left)
         {
             return TryGetEnum<Alignment>(attributes, "alignment", out alignment, defaultAlignment);
         }
@@ -807,18 +804,29 @@ namespace Toy_Synthesizer.Game.UI
                 return false;
             }
 
+            value = CreateVec2fValue(rawValue.Value, xIsPercent: xIsPercent, yIsPercent: yIsPercent);
+
+            return true;
+        }
+
+        public static Vec2fValue CreateVec2fValue(Vec2f rawValue, bool xIsPercent, bool yIsPercent)
+        {
+            // Due to how Vec2fValue works, if x or y is percent, both have to be treated as percentages.
+
+            Vec2fValue value;
+
             if (xIsPercent || yIsPercent)
             {
-                rawValue = GeoMath.PercentToScalar(rawValue.Value);
+                rawValue = GeoMath.PercentToScalar(rawValue);
 
-                value = Vec2fValue.Normalized(rawValue.Value);
+                value = Vec2fValue.Normalized(rawValue);
             }
             else
             {
-                value = Vec2fValue.Absolute(rawValue.Value);
+                value = Vec2fValue.Absolute(rawValue);
             }
 
-            return true;
+            return value;
         }
 
         public static bool TryGetFloatValue(ViewableList<XAttribute> attributes, string name, out FloatValue value)
@@ -1024,13 +1032,16 @@ namespace Toy_Synthesizer.Game.UI
             return true;
         }
 
+        // TODO: Implement tooltip attribute
         private static void ApplyAdditionalAttributes(UIManager uiManager, Widget widget, ViewableList<XAttribute> attributes)
         {
-            foreach (var attr in attributes)
+            for (int index = 0; index < attributes.Count; index++)
             {
+                XAttribute attribute = attributes[index];
+
                 // Name becomes lowercase here, so switch cases must be lowercase.
-                string name = attr.Name.LocalName.ToLower();
-                string value = attr.Value;
+                string name = attribute.Name.LocalName.ToLower();
+                string value = attribute.Value;
 
                 switch (name)
                 {
@@ -1081,6 +1092,10 @@ namespace Toy_Synthesizer.Game.UI
 
                     case "text":
                         SetText(widget, value);
+                        break;
+
+                    case "rendertextposition":
+                        SetRenderTextPosition(widget, value);
                         break;
 
                     case "title":
@@ -1157,6 +1172,20 @@ namespace Toy_Synthesizer.Game.UI
             if (widget is ITextWidget textWidget)
             {
                 textWidget.MaintainVisualScale = value;
+            }
+        }
+
+        private static void SetRenderTextPosition(Widget widget, string stringValue)
+        {
+            Vec2fValue value = ParseVec2fValue(stringValue);
+
+            if (widget is ITextWidget textWidget)
+            {
+                textWidget.RenderTextPosition = value;
+            }
+            else if (widget is Drawer drawer && drawer.CoverButton is TextButton drawerCoverTextButton)
+            {
+                drawerCoverTextButton.RenderTextPosition = value;
             }
         }
 
@@ -1265,35 +1294,6 @@ namespace Toy_Synthesizer.Game.UI
             return false;
         }
 
-        private static Vec2f ParseVec2f(string value)
-        {
-            string[] parts = value.Split(',', StringSplitOptions.TrimEntries);
-
-            if (parts.Length >= 1)
-            {
-                RemoveAllOfChar(parts, '(');
-                RemoveAllOfChar(parts, ')');
-
-                float x;
-                float y;
-
-                if (parts.Length >= 2)
-                {
-                    x = ParseFloat(parts[0]);
-                    y = ParseFloat(parts[1]);
-                }
-                else
-                {
-                    x = ParseFloat(parts[0]);
-                    y = x;
-                }
-
-                return new Vec2f(x, y);
-            }
-
-            return Vec2f.Zero;
-        }
-
         private static float ParseFloat(string value, out bool isPercent)
         {
             isPercent = false;
@@ -1346,6 +1346,13 @@ namespace Toy_Synthesizer.Game.UI
             return 0.0;
         }
 
+        private static Vec2fValue ParseVec2fValue(string value)
+        {
+            Vec2f rawValue = ParseVec2f(value, out bool xIsPercent, out bool yIsPercent);
+
+            return CreateVec2fValue(rawValue, xIsPercent: xIsPercent, yIsPercent: yIsPercent);
+        }
+
         private static Vec2f ParseVec2f(string value, out bool xIsPercent, out bool yIsPercent)
         {
             xIsPercent = false;
@@ -1369,6 +1376,35 @@ namespace Toy_Synthesizer.Game.UI
                     x = ParseFloat(parts[0], out xIsPercent);
                     y = x;
                     yIsPercent = xIsPercent;
+                }
+
+                return new Vec2f(x, y);
+            }
+
+            return Vec2f.Zero;
+        }
+
+        private static Vec2f ParseVec2f(string value)
+        {
+            string[] parts = value.Split(',', StringSplitOptions.TrimEntries);
+
+            if (parts.Length >= 1)
+            {
+                RemoveAllOfChar(parts, '(');
+                RemoveAllOfChar(parts, ')');
+
+                float x;
+                float y;
+
+                if (parts.Length >= 2)
+                {
+                    x = ParseFloat(parts[0]);
+                    y = ParseFloat(parts[1]);
+                }
+                else
+                {
+                    x = ParseFloat(parts[0]);
+                    y = x;
                 }
 
                 return new Vec2f(x, y);

@@ -57,8 +57,7 @@ namespace Toy_Synthesizer.Game.UI
         private Vec2f preExpansionSize;
         private Vec2f normalizedMovedAmount;
 
-        private AABB? previousParentPreciseLayoutAdapterBounds_This;
-        private readonly ViewableList<PreciseGroupLayoutAdapter.WidgetState> previousParentPreciseLayoutAdapterBounds = new ViewableList<PreciseGroupLayoutAdapter.WidgetState>();
+        private readonly ViewableList<Widget> movedSiblingsList = new ViewableList<Widget>(); // Used when laying out Parent.
 
         // For remembering states and correct layouts.
         private CompactBoolList childExpandablesExpanded;
@@ -187,6 +186,7 @@ namespace Toy_Synthesizer.Game.UI
             this.parentResize_IsLayoutEnabled = false;
 
             OnChildAddedEnd += ChildAddedEnd;
+            OnChildRemovedEnd += ChildRemovedEnd;
 
             layoutAdapter = new PreciseGroupLayoutAdapter();
             layoutAdapter.Disable();
@@ -252,13 +252,18 @@ namespace Toy_Synthesizer.Game.UI
                                 continue;
                             }
 
-                            previousParentPreciseLayoutAdapterBounds.Add(state.Copy());
-
                             Vec2f newChildParentAbsolutePosition = state.widget.Position;
 
-                            if ((moveAmount.X != 0f && state.widget.Position.X > Position.X) || (moveAmount.Y != 0f && state.widget.Position.Y >= Position.Y))
+                            if ((!GeoMath.IsZero_Precise(moveAmount.X) && GeoMath.GTE_Precise(state.widget.Position.X, Position.X))
+                                || (!GeoMath.IsZero_Precise(moveAmount.Y) && GeoMath.GTE_Precise(state.widget.Position.Y, Position.Y)))
                             {
                                 newChildParentAbsolutePosition += moveAmount;
+
+                                movedSiblingsList.Add(state.widget);
+                            }
+                            else
+                            {
+                                continue;
                             }
 
                             AABB newParentChildAbsoluteBounds = new AABB
@@ -272,53 +277,63 @@ namespace Toy_Synthesizer.Game.UI
                             parentLayoutAdapter.TrySetNormalizedBounds(state.widget, newParentChildNormalizedBounds);
                         }
                     }
-                    else if (!previousParentPreciseLayoutAdapterBounds.IsEmpty)
+                    else if (!movedSiblingsList.IsEmpty)
                     {
-                        for (int index = 0; index < previousParentPreciseLayoutAdapterBounds.Count; index++)
+                        for (int index = 0; index < parentLayoutStates.Length; index++)
                         {
-                            PreciseGroupLayoutAdapter.WidgetState state = previousParentPreciseLayoutAdapterBounds[index];
+                            PreciseGroupLayoutAdapter.WidgetState state = parentLayoutStates[index];
 
                             if (state.widget == this)
                             {
                                 continue;
                             }
 
-                            if (state.widget.Parent != Parent)
+                            if (!movedSiblingsList.Contains(state.widget))
                             {
                                 continue;
                             }
 
-                            AABB newParentChildNormalizedBounds = previousParentPreciseLayoutAdapterBounds[index].normalizedBounds;
+                            AABB newParentChildNormalizedBounds = state.normalizedBounds;
+
+                            newParentChildNormalizedBounds.Position += moveAmount / Parent.Size;
 
                             parentLayoutAdapter.TrySetNormalizedBounds(state.widget, newParentChildNormalizedBounds);
                         }
 
-                        previousParentPreciseLayoutAdapterBounds.Clear();
+                        movedSiblingsList.Clear();
                     }
                 }
-
-                Parent.ForEach(delegate (Widget parentChild)
+                else
                 {
-                    if (parentChild == this)
-                    {
-                        return;
-                    }
+                    // TODO: Maybe switch logic here to use movedSiblingsList
 
-                    if (DoesSibilingNeedMoved(parentChild, moveAmount, out Vec2f siblingMoveAmount))
+                    Parent.ForEach(delegate (Widget parentChild)
                     {
-                        MoveChildTo(parentChild, parentChild.Position + siblingMoveAmount,
-                                    setVisibility: false,
-                                    animate: AnimateParentChildren,
-                                    animateWithInterpolation: AnimateParentChildrenWithInterpolation,
-                                    onAnimationComplete: null);
-                    }
-                });
+                        if (parentChild == this)
+                        {
+                            return;
+                        }
 
-                TrySetParentPreciseLayoutAdapterEnabled(isEnabled: false);
+                        if (DoesSibilingNeedMoved(parentChild, moveAmount, out Vec2f siblingMoveAmount))
+                        {
+                            MoveChildTo(parentChild, parentChild.Position + siblingMoveAmount,
+                                        setVisibility: false,
+                                        animate: AnimateParentChildren,
+                                        animateWithInterpolation: AnimateParentChildrenWithInterpolation,
+                                        onAnimationComplete: null);
+                        }
+                    });
+                }
+
+                 // Not sure if it should disable the parent's precise layout adapter before calling Parent.Layout.
 
                 Parent.Layout();
 
-                TrySetParentPreciseLayoutAdapterEnabled(isEnabled: true);
+                /*TrySetParentPreciseLayoutAdapterEnabled(isEnabled: false);
+
+                Parent.Layout();
+
+                TrySetParentPreciseLayoutAdapterEnabled(isEnabled: true);*/
             }
         }
 
@@ -326,12 +341,12 @@ namespace Toy_Synthesizer.Game.UI
         {
             siblingMoveAmount = Vec2f.Zero;
 
-            if (moveAmount.X != 0f && sibling.Position.X > Position.X)
+            if (!GeoMath.IsZero_Precise(moveAmount.X) && GeoMath.GTE_Precise(sibling.Position.X, Position.X))
             {
                 siblingMoveAmount.X = moveAmount.X;
             }
 
-            if (moveAmount.Y != 0f && sibling.Position.Y > Position.Y)
+            if (!GeoMath.IsZero_Precise(moveAmount.Y) && GeoMath.GTE_Precise(sibling.Position.Y, Position.Y))
             {
                 siblingMoveAmount.Y = moveAmount.Y;
             }
@@ -341,7 +356,7 @@ namespace Toy_Synthesizer.Game.UI
 
         private bool TryRevertParentPreciseLayoutAdapterBounds()
         {
-            if (!previousParentPreciseLayoutAdapterBounds_This.HasValue)
+            if (Parent is null)
             {
                 return false;
             }
@@ -353,12 +368,16 @@ namespace Toy_Synthesizer.Game.UI
                 return false;
             }
 
-            adapter.TrySetNormalizedBounds(this, previousParentPreciseLayoutAdapterBounds_This.Value);
+            AABB bounds = new AABB(Position, preExpansionSize);
+
+            AABB normalizedBounds = PreciseGroupLayoutAdapter.GetNormalizedBounds(Parent, bounds);
+
+            adapter.TrySetNormalizedBounds(this, normalizedBounds);
 
             return true;
         }
 
-        private bool TrySetCurrentParentPreciseLayoutAdapterBounds(bool setThisBoundsPrevious = true)
+        private bool TrySetCurrentParentPreciseLayoutAdapterBounds()
         {
             if (!TryGetParentPreciseLayoutAdapter(out PreciseGroupLayoutAdapter parentAdapter))
             {
@@ -367,33 +386,9 @@ namespace Toy_Synthesizer.Game.UI
 
             parentAdapter.TryGetNormalizedBounds(this, out AABB previousBounds);
 
-            if (setThisBoundsPrevious)
-            {
-                this.previousParentPreciseLayoutAdapterBounds_This = previousBounds;
-            }
-
             AABB currentBounds = PreciseGroupLayoutAdapter.GetNormalizedBounds(Parent, this);
 
             parentAdapter.TrySetNormalizedBounds(this, currentBounds);
-
-            return true;
-        }
-
-        private bool TrySetParentPreciseLayoutAdapterEnabled(bool isEnabled)
-        {
-            if (!TryGetParentPreciseLayoutAdapter(out PreciseGroupLayoutAdapter parentAdapter))
-            {
-                return false;
-            }
-
-            if (!isEnabled)
-            {
-                parentAdapter.Disable();
-            }
-            else
-            {
-                parentAdapter.Enable();
-            }
 
             return true;
         }
@@ -852,11 +847,11 @@ namespace Toy_Synthesizer.Game.UI
         {
             LayoutArgs parentLayoutArgs = LayoutArgs.Create(Parent, this);
 
-            Parent?.Layout(parentLayoutArgs);
-
             layoutAdapter.Enable();
 
             Layout();
+
+            Parent?.Layout(parentLayoutArgs);
         }
 
         protected override void SizeChanged(ref Vec2f previousSize, ref Vec2f newSize)
@@ -886,7 +881,7 @@ namespace Toy_Synthesizer.Game.UI
             }
         }
 
-        protected void ChildAddedEnd(GroupWidget _, Widget child)
+        protected void ChildAddedEnd(GroupWidget _, Widget child, int index)
         {
             if (child != CoverButton)
             {
@@ -907,7 +902,7 @@ namespace Toy_Synthesizer.Game.UI
             Layout_ChildAddedOrRemoved();
         }
 
-        protected override void ChildRemoved(Widget child, int index)
+        protected void ChildRemovedEnd(GroupWidget _, Widget child, int index)
         {
             base.ChildRemoved(child, index);
 
@@ -954,7 +949,7 @@ namespace Toy_Synthesizer.Game.UI
 
             SetSizeInternally(targetExpansionSize);
 
-            TrySetCurrentParentPreciseLayoutAdapterBounds(setThisBoundsPrevious: false);
+            TrySetCurrentParentPreciseLayoutAdapterBounds();
 
             LayoutParent(moveDelta);
 

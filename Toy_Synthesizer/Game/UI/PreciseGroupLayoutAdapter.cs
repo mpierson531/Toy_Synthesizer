@@ -70,7 +70,7 @@ namespace Toy_Synthesizer.Game.UI
             return true;
         }
 
-        public bool TrySetNormalizedBounds(Widget widget,  AABB normalizedBounds)
+        public bool TrySetNormalizedBounds(Widget widget, AABB normalizedBounds)
         {
             WidgetState state = layoutState.Find(state => state.widget == widget);
 
@@ -131,6 +131,8 @@ namespace Toy_Synthesizer.Game.UI
         {
             if (widget is GroupWidget group)
             {
+                group.OnLayout -= AttachedWidget_OnLayout;
+
                 group.OnChildAdded -= AttachedWidget_OnChildAdded;
                 group.OnChildRemoved -= AttachedWidget_OnChildRemoved;
 
@@ -163,14 +165,14 @@ namespace Toy_Synthesizer.Game.UI
             layoutState.Clear();
         }
 
-        private void AttachedWidget_OnChildAdded(GroupWidget group, Widget child)
+        private void AttachedWidget_OnChildAdded(GroupWidget group, Widget child, int index)
         {
             WidgetState state = CreateState(group, child);
 
             this.layoutState.Add(state);
         }
 
-        private void AttachedWidget_OnChildRemoved(GroupWidget group, Widget child)
+        private void AttachedWidget_OnChildRemoved(GroupWidget group, Widget child, int index)
         {
             int stateIndex = layoutState.FindIndexOf(state => state.widget == child);
 
@@ -343,7 +345,7 @@ namespace Toy_Synthesizer.Game.UI
 
                 if (areBoundsNormalized)
                 {
-                    Vec2f normalizedScrollPaneOffset = scrollPaneOffset / scrollPaneGroup.Size;
+                    Vec2f normalizedScrollPaneOffset = scrollPaneOffset / scrollPaneGroup.GetViewportSize();
 
                     bounds.Position += new Vec2f(normalizedScrollPaneOffset.X, normalizedScrollPaneOffset.Y);
                 }
