@@ -651,7 +651,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
     <TextField Position=""(72.5%, 5%)"" 
                Size=""(22.5%, 12.5%)"" 
-               MaxCharacters=""20"" 
+               MaxCharacters=""20""
+               NumberAllowedSign=""1""
                NumberMinValue=""{PolyphonicSynthesizer.CenterFrequencyRange.Min}""
                NumberMaxValue=""{PolyphonicSynthesizer.CenterFrequencyRange.Max}""
                TreatAsScalarPercentage=""false""
@@ -695,6 +696,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         <TextField Position=""(130%, {drawerBeginY_Percent}%)"" 
                    Size=""(90%, 100%)"" 
                    MaxCharacters=""20"" 
+                   NumberAllowedSign=""1""
                    NumberMinValue=""{PolyphonicSynthesizer.AttackRange.Min}""
                    NumberMaxValue=""{PolyphonicSynthesizer.AttackRange.Max}""
                    NumberDefaultValue=""{-1}""
@@ -703,7 +705,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         <TextField Position=""(130%, 300%)"" 
                    Size=""(90%, 100%)"" 
-                   MaxCharacters=""20"" 
+                   MaxCharacters=""20""
+                   NumberAllowedSign=""1"" 
                    NumberMinValue=""{PolyphonicSynthesizer.DecayRange.Min}""
                    NumberMaxValue=""{PolyphonicSynthesizer.DecayRange.Max}""
                    NumberDefaultValue=""{-1}""
@@ -712,7 +715,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         <TextField Position=""(130%, 440%)"" 
                    Size=""(90%, 100%)"" 
-                   MaxCharacters=""20"" 
+                   MaxCharacters=""20""
+                   NumberAllowedSign=""1""  
                    NumberMinValue=""{PolyphonicSynthesizer.SustainRange.Min}""
                    NumberMaxValue=""{PolyphonicSynthesizer.SustainRange.Max}""
                    NumberDefaultValue=""{-1}""
@@ -721,7 +725,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         <TextField Position=""(130%, 580%)"" 
                    Size=""(90%, 100%)"" 
-                   MaxCharacters=""20"" 
+                   MaxCharacters=""20""
+                   NumberAllowedSign=""1""
                    NumberMinValue=""{PolyphonicSynthesizer.ReleaseRange.Min}""
                    NumberMaxValue=""{PolyphonicSynthesizer.ReleaseRange.Max}""
                    NumberDefaultValue=""{-1}""

@@ -25,7 +25,7 @@ using Toy_Synthesizer.Game.UI;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 {
-    // TODO: Improve keybinding stuff.
+    // TODO: Implement more advanced UI widget support for utilities
     public class VoiceFrontend
     {
         public const double DEFAULT_SHIFT_SEMITONE_AMOUNT = 12.0;
@@ -350,6 +350,20 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
         public void InitUI(UIManager uiManager)
         {
+            string utilitiesItemsNames = "[";
+
+            for (int index = 0; index < utilityActionNames.Length; index++)
+            {
+                utilitiesItemsNames += utilityActionNames[index];
+
+                if (index + 1 < utilityActionNames.Length)
+                {
+                    utilitiesItemsNames += ", ";
+                }
+            }
+
+            utilitiesItemsNames += "]";
+
             string xml = $@"
 <Layout>
 
@@ -361,7 +375,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
                   Size=""(17.5%, 5%)"" 
                   DropDownWidth=""350%""
                   ButtonSize=""(325%, 100%)""
-                  Items=""[Match Notes (by frequency), Match Notes (by name)]""
+                  Items=""{utilitiesItemsNames}""
                   CoverButtonText=""Utilities""
                   Name=""{VoiceUtilitiesDropDownName}""/>
 
@@ -443,9 +457,22 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
         private void InitUtilityActions(out string[] actionNames, out Action[] actions)
         {
-            actionNames = new string[] { "Match notes (from frequency", "Match notes (from voice name)" };
+            actionNames = new string[] 
+            { 
+                "Match notes (from frequency",
+                "Match notes (from voice name)",
 
-            actions = new Action[] { MatchNotes_FromFrequency, MatchNotes_FromName };
+                "Shift all by 1 octave",
+                "Shfit all by -1 octave"
+            };
+
+            actions = new Action[] 
+            { 
+                MatchNotes_FromFrequency,
+                MatchNotes_FromName,
+
+                ShiftAllByOctave_One,
+                ShiftAllByOctave_MinusOne };
         }
 
         // TODO: In the MatchNotes_ methods, I'm locking. Maybe find another way without locking.
@@ -455,10 +482,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             {
                 Utils.Assert(synthesizer.ContainsVoice(voiceGroup.Voice), "voice was not contained in the synthesizer. This should never be reached!");
 
-                if (MidiUtils.TryMatchFrequency(voiceGroup.Voice.CenterFrequency, out MidiNote note))
-                {
-                    voiceGroup.SetVoiceName(note.ToString());
-                }
+                TryMatchNote_FromFrequency(voiceGroup);
             }
 
             lock (lockObject)
@@ -469,34 +493,70 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
         private void MatchNotes_FromName()
         {
-            void MatchNoteFrequency(VoiceGroup voiceGroup)
+            void MatchNoteName(VoiceGroup voiceGroup)
             {
                 Utils.Assert(synthesizer.ContainsVoice(voiceGroup.Voice), "voice was not contained in the synthesizer. This should never be reached!");
 
-                if (MidiUtils.TryMatchNoteName(voiceGroup.Voice.Name, out MidiNote note))
-                {
-                    voiceGroup.SetFrequency(MidiUtils.GetFrequency(note));
-                }
+                TryMatchNote_FromName(voiceGroup);
             }
 
             lock (lockObject)
             {
-                voicesGroup.ForEachOfType<VoiceGroup>(MatchNoteFrequency);
+                voicesGroup.ForEachOfType<VoiceGroup>(MatchNoteName);
+            }
+        }
+
+        private void ShiftAllByOctave_One()
+        {
+            ShiftAllByOctave(1);
+        }
+
+        private void ShiftAllByOctave_MinusOne()
+        {
+            ShiftAllByOctave(-1);
+        }
+
+        private void ShiftAllByOctave(int octaveAmount)
+        {
+            void ShiftOctave(VoiceGroup voiceGroup)
+            {
+                Utils.Assert(synthesizer.ContainsVoice(voiceGroup.Voice), "voice was not contained in the synthesizer. This should never be reached!");
+
+                double newFrequency = DSPUtils.ShiftOctave(voiceGroup.Voice.CenterFrequency, octaveAmount);
+
+                voiceGroup.SetFrequency(newFrequency);
+
+                TryMatchNote_FromFrequency(voiceGroup, newFrequency);
+            }
+
+            lock (lockObject)
+            {
+                voicesGroup.ForEachOfType<VoiceGroup>(ShiftOctave);
+            }
+        }
+
+        private static void TryMatchNote_FromFrequency(VoiceGroup voiceGroup)
+        {
+            TryMatchNote_FromFrequency(voiceGroup, voiceGroup.Voice.CenterFrequency);
+        }
+
+        private static void TryMatchNote_FromFrequency(VoiceGroup voiceGroup, double centerFrequency)
+        {
+            if (MidiUtils.TryMatchFrequency(centerFrequency, out MidiNote note))
+            {
+                voiceGroup.SetVoiceName(note.ToString());
+            }
+        }
+
+        private static void TryMatchNote_FromName(VoiceGroup voiceGroup)
+        {
+            if (MidiUtils.TryMatchNoteName(voiceGroup.Voice.Name, out MidiNote note))
+            {
+                voiceGroup.SetFrequency(MidiUtils.GetFrequency(note));
             }
         }
 
         private const string VoiceUtilitiesDropDownName = "VoiceUtiltiesDropDown";
-
-        // TODO: Finish
-        /*private void DropAllByOctave()
-        {
-            void DropFrequenciesByOctave(VoiceGroup voiceGroup)
-            {
-                Utils.Assert(synthesizer.ContainsVoice(voiceGroup.Voice), "voice was not contained in the synthesizer. This should never be reached!");
-
-                int currentOctave = MidiUtils.GetOctave(voiceGroup.Voice.CenterFrequency);
-            }
-        }*/
 
         private static Dictionary<Voice, KeyBinding> GetDefaultKeyVoiceBindings()
         {

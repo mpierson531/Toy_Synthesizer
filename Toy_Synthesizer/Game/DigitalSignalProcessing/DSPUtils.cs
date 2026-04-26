@@ -8,6 +8,11 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
 {
     public static class DSPUtils
     {
+        public static double ShiftOctave(double frequency, double octaveAmount)
+        {
+            return frequency * Math.Pow(2.0, octaveAmount);
+        }
+
         public static void WriteMonoToStereo(float[] buffer, int offset, int index, double sample)
         {
             buffer[offset + index] = (float)sample;
