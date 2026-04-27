@@ -93,6 +93,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private TextField SustainTextField;
         private TextField ReleaseTextField;
 
+        private Drawer adsrDrawer;
+
         private Drawer oscillatorsDrawer;
         private Button addOscillatorButton;
         private LabelTooltip addOscillatorsButtonTooltip;
@@ -187,6 +189,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             FrequencyDisplayLabel = FindAsByNameDeepSearch<PlainLabel>(FrequencyDisplayLabelName);
             FrequencyTextField = FindAsByNameDeepSearch<TextField>(FrequencyTextFieldName);
 
+            adsrDrawer = FindAsByNameDeepSearch<Drawer>(AdsrDrawerName);
+
             AttackDisplayLabel = FindAsByNameDeepSearch<PlainLabel>(AttackDisplayLabelName);
             DecayDisplayLabel = FindAsByNameDeepSearch<PlainLabel>(DecayDisplayLabelName);
             SustainDisplayLabel = FindAsByNameDeepSearch<PlainLabel>(SustainDisplayLabelName);
@@ -212,25 +216,31 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             addOscillatorButton.OnClick += AddOscillatorButton_OnClick;
 
-            addOscillatorsButtonTooltip = uiManager.AddTextTooltip(addOscillatorButton, "Click to add an oscillator");
-
             keybindingsDrawer = FindAsByNameDeepSearch<Drawer>(KeybindingsDrawerName);
 
             addKeybindingButton = FindAsByNameDeepSearch<Button>(AddKeybindingButtonName);
 
             addKeybindingButton.OnClick += AddKeybindingButton_OnClick;
 
-            addKeybindingButtonTooltip = uiManager.AddTextTooltip(addKeybindingButton, "Click to add a keybinding");
-
             InitTooltips(uiManager);
         }
 
         private void InitTooltips(UIManager uiManager)
         {
+            addOscillatorsButtonTooltip = uiManager.AddTextTooltip(addOscillatorButton, "Click to add an oscillator");
+
+            addKeybindingButtonTooltip = uiManager.AddTextTooltip(addKeybindingButton, "Click to add a keybinding");
+
             string nameDescription = "The name of this voice";
 
             string centerFrequencyDescription = $"The center frequency of this voice, around which the oscillators oscillate."
                                                 + $"\nMin: {PolyphonicSynthesizer.MIN_CENTER_FREQUENCY}\nMax: {PolyphonicSynthesizer.MAX_CENTER_FREQUENCY}";
+
+            string adsrDrawerCoverButtonDescription = $"The attack, decay, sustain, and release of the voice";
+
+            string oscillatorsDrawerCoverButtonDescription = $"The oscillators that oscillate around the voice's center frequency";
+
+            string keybindingsDrawerCoverButtonDescription = $"Keybindings to make the voice go brrr";
 
             string attackDescription = $"How long it takes to reach peak volume, in seconds." 
                                        + $"\nMin: {PolyphonicSynthesizer.MIN_ATTACK}\nMax: {PolyphonicSynthesizer.MAX_ATTACK}";
@@ -261,6 +271,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             uiManager.AddTextTooltip(ReleaseDisplayLabel, releaseDescription);
             uiManager.AddTextTooltip(ReleaseTextField, releaseDescription);
+
+            uiManager.AddTextTooltip(adsrDrawer.CoverButton, adsrDrawerCoverButtonDescription);
+
+            uiManager.AddTextTooltip(oscillatorsDrawer.CoverButton, oscillatorsDrawerCoverButtonDescription);
+
+            uiManager.AddTextTooltip(keybindingsDrawer.CoverButton, keybindingsDrawerCoverButtonDescription);
         }
 
         private void AddOscillatorButton_OnClick()
@@ -630,27 +646,27 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             return $@"<Layout>
 
-    <PlainLabel Position=""(5%, 5%)""
-                Size=""(25%, 12.5%)"" 
+    <PlainLabel Position=""(5%, 4.5%)""
+                Size=""(25%, 11%)"" 
                 Text=""Name:"" 
                 FitText=""false"" 
                 GrowWithText=""true"" 
                 Name=""{NameLabelName}""/>
 
-    <TextField Position=""(21%, 5%)"" 
-               Size=""(22.5%, 12.5%)"" 
+    <TextField Position=""(21%, 4.5%)"" 
+               Size=""(22.5%, 11%)"" 
                MaxCharacters=""20"" 
                Name=""{NameTextFieldName}""/>
 
-    <PlainLabel Position=""(46%, 5%)"" 
-                Size=""(20%, 12.5%)"" 
+    <PlainLabel Position=""(46%, 4.5%)"" 
+                Size=""(20%, 11%)"" 
                 Text=""Frequency:"" 
                 FitText=""false"" 
                 GrowWithText=""true"" 
                 Name=""{FrequencyDisplayLabelName}""/>
 
-    <TextField Position=""(72.5%, 5%)"" 
-               Size=""(22.5%, 12.5%)"" 
+    <TextField Position=""(72.5%, 4.5%)"" 
+               Size=""(22.5%, 11%)"" 
                MaxCharacters=""20""
                NumberAllowedSign=""1""
                NumberMinValue=""{PolyphonicSynthesizer.CenterFrequencyRange.Min}""
@@ -658,10 +674,13 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                TreatAsScalarPercentage=""false""
                Name=""{FrequencyTextFieldName}""/>
 
+    <VoiceMixControlGroup Position=""(5%, 20.75%)""
+                          Size=""(90%, 18.5%)""/>
+
 <!--ADSR-->
 
-    <Drawer Position=""(5%, 21.25%)"" 
-            Size=""(30%, 12.5%)"" 
+    <Drawer Position=""(5%, 42%)""
+            Size=""(30%, 11%)"" 
             CoverText=""ADSR""
             Name=""{AdsrDrawerName}"">
 
@@ -735,11 +754,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
     </Drawer>
 
-    <VoiceMixControlGroup Position=""(5%, 38.75%)""
-                          Size=""(90%, 20%)""/>
+<!-- Oscillators !-->
 
-    <Drawer Position=""(5%, 60%)"" 
-            Size=""(30%, 12.5%)"" 
+    <Drawer Position=""(5%, 58%)"" 
+            Size=""(30%, 11%)"" 
             CoverText=""Oscillators""
             Name=""{OscillatorsDrawerName}"">
             
@@ -753,8 +771,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Name=""{AddOscillatorButtonName}""/>
     </Drawer>
 
-    <Drawer Position=""(5%, 81.25%)"" 
-            Size=""(30%, 12.5%)"" 
+    <Drawer Position=""(5%, 74%)"" 
+            Size=""(30%, 11%)"" 
             CoverText=""Keybindings""
             RenderTextPosition=""(-2.5%, 0%)""
             Name=""{KeybindingsDrawerName}"">

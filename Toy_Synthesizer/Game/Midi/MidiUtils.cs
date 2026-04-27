@@ -20,6 +20,8 @@ namespace Toy_Synthesizer.Game.Midi
 
         public const int DEFAULT_ROUNDING_PRECISION = 2;
 
+        public const double PRECISION_EPSILON = GeoMath.DEFAULT_PRECISION_EPSILON;
+
         public const StringComparison DEFAULT_STRING_COMPARISON_TYPE = StringComparison.OrdinalIgnoreCase;
 
         public static readonly ImmutableArray<MidiNote> AllMidiNotes;
@@ -140,7 +142,7 @@ namespace Toy_Synthesizer.Game.Midi
 
                 double noteFrequency = GetFrequency(currentNote, precsion);
 
-                if (GeoMath.Equals_Precise(frequency, noteFrequency))
+                if (GeoMath.Equals_Precise(frequency, noteFrequency, PRECISION_EPSILON))
                 {
                     note = currentNote;
 

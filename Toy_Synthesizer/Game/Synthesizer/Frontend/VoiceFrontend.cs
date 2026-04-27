@@ -367,9 +367,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             string xml = $@"
 <Layout>
 
-    <Window Title=""Voices"" X=""50"" Y=""50"" W=""25%"" H=""60%"">
+    <Window Title=""Voices"" X=""2.6%"" Y=""4.6%"" W=""25%"" H=""70%"">
 
-        <ScrollPane X=""0%"" Y=""7.5%"" W=""100%"" H=""87.5%""/>
+        <ScrollPane X=""0%"" Y=""6%"" W=""100%"" H=""87.5%""/>
 
         <DropDown Position=""(2.5%, 1%)""
                   Size=""(17.5%, 5%)"" 
@@ -475,7 +475,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
                 ShiftAllByOctave_MinusOne };
         }
 
-        // TODO: In the MatchNotes_ methods, I'm locking. Maybe find another way without locking.
+        // TODO: In some of the utility methods, I'm locking. Maybe find another way without locking.
         private void MatchNotes_FromFrequency()
         {
             void MatchNoteFrequency(VoiceGroup voiceGroup)
