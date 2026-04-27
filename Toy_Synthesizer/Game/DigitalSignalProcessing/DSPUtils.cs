@@ -8,7 +8,7 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
 {
     public static class DSPUtils
     {
-        public static double ShiftOctave(double frequency, double octaveAmount)
+        public static double ShiftOctaveBy(double frequency, double octaveAmount)
         {
             return frequency * Math.Pow(2.0, octaveAmount);
         }

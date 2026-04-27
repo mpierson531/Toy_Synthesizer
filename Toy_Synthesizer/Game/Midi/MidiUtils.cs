@@ -8,12 +8,17 @@ using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
+
 namespace Toy_Synthesizer.Game.Midi
 {
     public static class MidiUtils
     {
         public const int A4_CENTER_NOTE = 69;
-        public const double A4_CENTER_FREQUENCY = 440.0;
+        public const double A4_CENTER_FREQUENCY = 440; // TODO: Subject to change; may make static or something.
+        private const double STANDARD_A4_CENTER_FREQUENCY = 440;
+
+        public const int DEFAULT_ROUNDING_PRECISION = 2;
 
         public const StringComparison DEFAULT_STRING_COMPARISON_TYPE = StringComparison.OrdinalIgnoreCase;
 
@@ -86,13 +91,13 @@ namespace Toy_Synthesizer.Game.Midi
             AllMidiNoteNames_Shorthand = new ImmutableArray<string>(allMidiNoteNames_Shorthand_Array);
         }
 
-        public static MidiNote ShiftOctave(MidiNote note, int targetOctave)
+        public static MidiNote ShiftOctaveBy(MidiNote note, int octaveAmount)
         {
-            int semitone = GetSemitone(note);
+            double frequency = GetFrequency(note);
 
-            int shiftedNote = (targetOctave + 1) * 12 + semitone;
+            double shiftedFrequency = DSPUtils.ShiftOctaveBy(frequency, octaveAmount);
 
-            return (MidiNote)shiftedNote;
+            return MatchFrequency_Raw(shiftedFrequency);
         }
 
         public static int GetSemitone(MidiNote note)
@@ -115,7 +120,7 @@ namespace Toy_Synthesizer.Game.Midi
             return midiNote / 12 - 1;
         }
 
-        public static double GetFrequency(MidiNote note, int precision = 2)
+        public static double GetFrequency(MidiNote note, int precision = DEFAULT_ROUNDING_PRECISION)
         {
             double frequency = A4_CENTER_FREQUENCY * Math.Pow(2.0, ((int)note - A4_CENTER_NOTE) / 12.0);
 
@@ -125,7 +130,7 @@ namespace Toy_Synthesizer.Game.Midi
         }
 
         public static bool TryMatchFrequency(double frequency, out MidiNote note,
-                                             int precsion = 2)
+                                             int precsion = DEFAULT_ROUNDING_PRECISION)
         {
             frequency = GeoMath.RoundAwayFromZero(frequency, precsion);
 
@@ -185,6 +190,36 @@ namespace Toy_Synthesizer.Game.Midi
             note = default;
 
             return false;
+        }
+
+        /// <summary>
+        /// Maps <paramref name="frequency"/> to a <see cref="MidiNote"/>.
+        /// 
+        /// <br></br>
+        /// <br></br>
+        /// 
+        /// This rounds to the nearest MIDI note, so if <paramref name="frequency"/> does not exactly match a note, this may produce unexpected results.
+        /// 
+        /// <br></br>
+        /// <br></br>
+        /// 
+        /// See also: <see cref="TryMatchFrequency(double, out MidiNote, int)"/>
+        /// 
+        /// </summary>
+        /// 
+        public static MidiNote MatchFrequency_Raw(double frequency, int precision = DEFAULT_ROUNDING_PRECISION)
+        {
+            double midiNote = GeoMath.RoundAwayFromZero(12.0 * Math.Log2(frequency / A4_CENTER_FREQUENCY) + 69, precision);
+
+            return (MidiNote)midiNote;
+        }
+
+        /// <summary>
+        /// Scales <paramref name="frequency"/> by <code>(<see cref="A4_CENTER_FREQUENCY"/> / <see cref="STANDARD_A4_CENTER_FREQUENCY"/></code>
+        /// </summary>
+        public static double ScaleFrequencyByA4(double frequency)
+        {
+            return frequency * (A4_CENTER_FREQUENCY / STANDARD_A4_CENTER_FREQUENCY);
         }
     }
 }

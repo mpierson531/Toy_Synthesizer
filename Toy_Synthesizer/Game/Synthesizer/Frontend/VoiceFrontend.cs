@@ -522,7 +522,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             {
                 Utils.Assert(synthesizer.ContainsVoice(voiceGroup.Voice), "voice was not contained in the synthesizer. This should never be reached!");
 
-                double newFrequency = DSPUtils.ShiftOctave(voiceGroup.Voice.CenterFrequency, octaveAmount);
+                double newFrequency = DSPUtils.ShiftOctaveBy(voiceGroup.Voice.CenterFrequency, octaveAmount);
 
                 voiceGroup.SetFrequency(newFrequency);
 
