@@ -11,14 +11,12 @@ using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
-using NAudio.Wave;
-
 using Toy_Synthesizer.Game.CommonUtils;
-using Toy_Synthesizer.Game.Synthesizer.Backend;
+using Toy_Synthesizer.Game.AudioBackend;
 
 namespace Toy_Synthesizer.Game.DigitalSignalProcessing
 {
-    public class DSP : ISampleProvider
+    public class DSP : IFloatSampleProvider
     {
         public const double DEFAULT_GLOBAL_GAIN = 0.5;
         public const double DEFAULT_MASTER_VOLUME = 1.0;
@@ -60,7 +58,6 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
 
         private ArrayRingBuffer<float> recordedAudio;
 
-        private readonly WaveFormat waveFormat;
         private readonly int sampleRate;
 
         private readonly object lockObject = new object();
@@ -77,11 +74,6 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
         public int SampleRate
         {
             get => sampleRate;
-        }
-
-        public WaveFormat WaveFormat
-        {
-            get => waveFormat;
         }
 
         public double GlobalGain
@@ -154,9 +146,6 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             get => currentRightMix;
         }
 
-        public event Action<PolyphonicSynthesizer, Voice> OnVoiceAdded;
-        public event Action<PolyphonicSynthesizer, Voice> OnVoiceRemoved;
-
         public event Action<double> OnGlobalGainChanged;
         public event Action<double> OnMasterVolumeChanged;
         public event Action<double> OnGlobalPanChanged;
@@ -164,7 +153,6 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
         public DSP(int sampleRate)
         {
             this.sampleRate = sampleRate;
-            waveFormat = WaveFormat.CreateIeeeFloatWaveFormat(sampleRate, 2);
 
             this.tempCommands = new ViewableList<DSPCommand>(1000);
             this.pendingCommands = new ViewableList<DSPCommand>(1000);

@@ -28,6 +28,7 @@ using GeoLib.GeoUtils.Collections;
 using GeoLib.GeoUtils.Pooling;
 
 using Toy_Synthesizer.Game.UI;
+using Toy_Synthesizer.Game.AudioBackend;
 using Toy_Synthesizer.Game.DigitalSignalProcessing;
 
 namespace Toy_Synthesizer.Game
@@ -69,7 +70,7 @@ namespace Toy_Synthesizer.Game
         private readonly MessagePackSerializerOptions readableSerializerOptions;
         private readonly MessagePackSerializerOptions compactSerializerOptions;
 
-        private AudioBackend audioBackend;
+        private AudioBackend.AudioBackend audioBackend;
 
         private Synthesizer.Backend.PolyphonicSynthesizer synthesizer;
         private Synthesizer.Frontend.Frontend synthesizerFrontend;
@@ -173,7 +174,7 @@ namespace Toy_Synthesizer.Game
             return "Config";
         }
 
-        public AudioBackend AudioBackend
+        public AudioBackend.AudioBackend AudioBackend
         {
             get => audioBackend;
         }
@@ -272,11 +273,11 @@ namespace Toy_Synthesizer.Game
             Geo.Display.Resize(TargetWindowSize);
             isInitializedInternally = true;
 
-            dsp = new DSP(AudioBackend.SAMPLE_RATE);
+            dsp = new DSP(Toy_Synthesizer.Game.AudioBackend.AudioBackend.SAMPLE_RATE);
 
-            audioBackend = new AudioBackend(this, dsp);
+            audioBackend = new AudioBackend.AudioBackend(this, dsp);
 
-            synthesizer = new Synthesizer.Backend.PolyphonicSynthesizer(AudioBackend.SAMPLE_RATE);
+            synthesizer = new Synthesizer.Backend.PolyphonicSynthesizer(Toy_Synthesizer.Game.AudioBackend.AudioBackend.SAMPLE_RATE);
 
             synthesizerFrontend = new Synthesizer.Frontend.Frontend(this);
 
