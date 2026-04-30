@@ -209,23 +209,6 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             QueueCommand(DSPCommand.RemoveAudioEffect(effect));
         }
 
-        public bool TryGetRecordedAudio(out ReadOnlySpan<float> recording)
-        {
-            lock (lockObject)
-            {
-                if (IsRecordingAudio)
-                {
-                    recording = ReadOnlySpan<float>.Empty;
-
-                    return false;
-                }
-
-                recording = recordedAudio.GetReadonlySpan();
-
-                return true;
-            }
-        }
-
         public bool TryTakeRecordedAudio(Span<float> samples, int requestedCount, out int realCount)
         {
             lock (lockObject)
@@ -252,6 +235,7 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
                 }
 
                 Span<float> samplesSpan = samples.Slice(0, toRead);
+
                 realCount = recordedAudio.Read(samplesSpan);
 
                 return realCount > 0;
@@ -310,89 +294,84 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             currentLeftMix = leftMix;
             currentRightMix = rightMix;
 
-            MixAudioSources(buffer, offset, count);
+            Span<float> bufferSpan = buffer.AsSpan(offset, count);
 
-            MixAudioEffects(buffer, offset, count);
+            MixAudioSources(bufferSpan);
+
+            MixAudioEffects(bufferSpan);
 
             // TODO: Maybe change to include gain/pan/final mix in recording.
             if (isRecordingAudio)
             {
-                recordedAudio.Write(buffer.AsSpan(offset, count));
+                recordedAudio.Write(bufferSpan);
             }
 
-            FinalMix(buffer, offset, count, leftMix, rightMix);
+            FinalMix(bufferSpan, leftMix, rightMix);
 
             return count;
         }
 
-        private void MixAudioSources(float[] buffer, int offset, int count)
+        private void MixAudioSources(Span<float> buffer)
         {
             if (audioSources.IsEmpty)
             {
                 return;
             }
 
-            if (count > tempAudioSourceMixBuffer.Length)
+            if (buffer.Length > tempAudioSourceMixBuffer.Length)
             {
                 throw new InvalidOperationException("This should never be reached!");
             }
 
             int audioSourceCount = audioSources.Count;
 
-            Span<float> mixBuffer = new Span<float>(tempAudioSourceMixBuffer, 0, count);
+            Span<float> mixBuffer = new Span<float>(tempAudioSourceMixBuffer, 0, buffer.Length);
 
             for (int index = 0; index < audioSourceCount; index++)
             {
-                //mixBuffer.Clear();
-
-                Array.Clear(tempAudioSourceMixBuffer, 0, count);
+                mixBuffer.Clear();
 
                 int read = audioSources[index].Read(mixBuffer);
 
                 for (int i = 0; i < read; i++)
                 {
-                    buffer[offset + i] += mixBuffer[i];
+                    buffer[i] += mixBuffer[i];
                 }
             }
         }
 
-        private void MixAudioEffects(float[] buffer, int offset, int count)
+        private void MixAudioEffects(Span<float> buffer)
         {
             if (effects.IsEmpty)
             {
                 return;
             }
 
-            Span<float> bufferSpan = new Span<float>(buffer, offset, count);
-
             for (int index = 0; index < effects.Count; index++)
             {
-                effects[index].Apply(bufferSpan);
+                effects[index].Apply(buffer);
             }
         }
 
-        private void FinalMix(float[] buffer, int offset, int count, double leftMix, double rightMix)
+        private static void FinalMix(Span<float> buffer, double leftMix, double rightMix)
         {
-            for (int index = 0; index < count; index += 2)
+            for (int index = 0; index < buffer.Length; index += 2)
             {
-                int bufferIndex = offset + index;
-
-                double leftSample = buffer[bufferIndex] * leftMix;
-                double rightSample = buffer[bufferIndex + 1] * rightMix;
+                double leftSample = buffer[index] * leftMix;
+                double rightSample = buffer[index + 1] * rightMix;
 
                 leftSample = ClampSample(leftSample);
                 rightSample = ClampSample(rightSample);
 
-                DSPUtils.WriteStereoToStereo(buffer, offset, index, leftSample, rightSample);
+                DSPUtils.WriteStereoToStereo(buffer, offset: 0, index, leftSample, rightSample);
             }
         }
 
         private void ExecuteCommands()
         {
-            ViewableList<DSPCommand> newTempCommands = pendingCommands;
             ViewableList<DSPCommand> commands = Interlocked.Exchange(ref pendingCommands, tempCommands);
 
-            Interlocked.Exchange(ref tempCommands, newTempCommands);
+            tempCommands = commands;
 
             for (int index = 0; index < commands.Count; index++)
             {
@@ -424,6 +403,7 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             // Handling SendAudioSourceCommand elsewhere.
 
             GeoDebug.Assert(command.Type != DSPCommandType.SendAudioSourceCommand);
+            GeoDebug.Assert(command.Type != DSPCommandType.SendAudioEffectCommand);
 
             switch (command.Type)
             {

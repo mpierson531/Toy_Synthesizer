@@ -87,9 +87,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             if (isPlaying)
             {
-                isPlaying = false;
-
                 dsp.RemoveAudioSource(recordedAudioSource);
+
+                isPlaying = false;
 
                 playPauseButton.Style = uiManager.GetStyle<ImageButton.ImageButtonStyle>("PlayButtonStyle");
 
@@ -98,9 +98,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             }
             else
             {
-                isPlaying = true;
-
                 dsp.AddAudioSource(recordedAudioSource);
+
+                isPlaying = true;
 
                 playPauseButton.Style = uiManager.GetStyle<ImageButton.ImageButtonStyle>("PauseButtonStyle");
 
@@ -112,9 +112,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             if (dsp.IsRecordingAudio)
             {
-                isRecording = false;
-
                 dsp.StopRecordingAudio();
+
+                isRecording = false;
 
                 recordButton.Style = uiManager.GetStyle<ImageButton.ImageButtonStyle>("RecordButtonStyle");
 
@@ -126,9 +126,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             }
             else
             {
-                isRecording = true;
-
                 dsp.BeginRecordingAudio();
+
+                isRecording = true;
 
                 recordButton.Style = uiManager.GetStyle<ImageButton.ImageButtonStyle>("StopButtonStyle");
 

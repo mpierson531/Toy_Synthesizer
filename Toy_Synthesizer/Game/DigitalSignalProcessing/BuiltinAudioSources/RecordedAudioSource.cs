@@ -32,6 +32,7 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing.BuiltinAudioSources
             get
             {
                 long totalFrames = framesPlayed;
+
                 long clipFrames = dsp.RecordedAudioCount / 2;
 
                 if (clipFrames == 0)
