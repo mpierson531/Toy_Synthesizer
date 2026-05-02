@@ -21,6 +21,7 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
         public const double DEFAULT_GLOBAL_GAIN = 0.5;
         public const double DEFAULT_MASTER_VOLUME = 1.0;
         public const double DEFAULT_GLOBAL_PAN = 0.0;
+        public const bool DEFAULT_IS_STEREO = true;
 
         public const double MIN_GLOBAL_GAIN = 0.0;
         public const double MAX_GLOBAL_GAIN = 5.0;
@@ -30,6 +31,11 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
 
         public const double MIN_GLOBAL_PAN = -1.0;
         public const double MAX_GLOBAL_PAN = 1.0;
+
+        private const double HALF_PI = Math.PI / 2;
+
+        // Used when IsStereo is false, to ensure the volume is the same as if it were stereo panned to the center.
+        public static readonly double CenterPanMixCoefficient;
 
         public static readonly NumberRange<double> GlobalGainRange;
         public static readonly NumberRange<double> MasterVolumeRange;
@@ -42,6 +48,8 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             MasterVolumeRange = NumberRange<double>.From(MIN_MASTER_VOLUME, MAX_MASTER_VOLUME);
 
             GlobalPanRange = NumberRange<double>.From(MIN_GLOBAL_PAN, MAX_GLOBAL_PAN);
+
+            CenterPanMixCoefficient = Math.Cos(0.5 * HALF_PI);
         }
 
         private readonly float[] tempAudioSourceMixBuffer = new float[int.MaxValue / 2];
@@ -65,6 +73,8 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
         private double globalGain;
         private double masterVolume;
         private double globalPan;
+
+        private int isStereo;
 
         private bool isRecordingAudio;
 
@@ -121,6 +131,21 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             }
         }
 
+        public bool IsStereo
+        {
+            get => Interlocked.CompareExchange(ref isStereo, 1, 1) != 0;
+
+            set
+            {
+                lock (lockObject)
+                {
+                    isStereo = value ? 1 : 0;
+
+                    OnIsStereoChanged?.Invoke(value);
+                }
+            }
+        }
+
         public bool IsRecordingAudio
         {
             get => isRecordingAudio;
@@ -149,6 +174,7 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
         public event Action<double> OnGlobalGainChanged;
         public event Action<double> OnMasterVolumeChanged;
         public event Action<double> OnGlobalPanChanged;
+        public event Action<bool> OnIsStereoChanged;
 
         public DSP(int sampleRate)
         {
@@ -174,6 +200,8 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             MasterVolume = DEFAULT_MASTER_VOLUME;
 
             GlobalPan = DEFAULT_GLOBAL_PAN;
+
+            IsStereo = DEFAULT_IS_STEREO;
         }
 
         // Not from audio thread, so locking should be ok for the most part.
@@ -256,13 +284,15 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             QueueCommand(DSPCommand.SendAudioEffectCommand(audioEffect, command));
         }
 
-        public int Read(float[] buffer, int offset, int count)
+        int IFloatSampleProvider.Read(float[] buffer, int offset, int count)
         {
             ExecuteCommands();
 
             Array.Clear(buffer); // Only this seems to work.
 
             // Array.Clear(buffer, offset, count); // Doesn't seem to work. Strange sputtering when using this.
+
+            Span<float> bufferSpan = buffer.AsSpan(offset, count);
 
             double gain = GlobalGain;
             double masterVolume = MasterVolume;
@@ -271,18 +301,29 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
 
             double globalPan = GlobalPan;
 
-            double normalizedPan = (globalPan + 1.0) / 2.0;
+            bool isStereo = IsStereo;
 
-            double leftMix = Math.Cos(normalizedPan * (Math.PI / 2));
-            double rightMix = Math.Sin(normalizedPan * (Math.PI / 2));
+            double leftMix;
+            double rightMix;
+
+            if (!isStereo)
+            {
+                leftMix = CenterPanMixCoefficient;
+                rightMix = CenterPanMixCoefficient;
+            }
+            else
+            {
+                double normalizedPan = (globalPan + 1.0) / 2.0;
+
+                leftMix = Math.Cos(normalizedPan * HALF_PI);
+                rightMix = Math.Sin(normalizedPan * HALF_PI);
+            }
 
             leftMix *= volumeCoefficient;
             rightMix *= volumeCoefficient;
 
             currentLeftMix = leftMix;
             currentRightMix = rightMix;
-
-            Span<float> bufferSpan = buffer.AsSpan(offset, count);
 
             MixAudioSources(bufferSpan);
 
