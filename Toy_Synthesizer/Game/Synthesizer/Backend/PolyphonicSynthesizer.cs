@@ -9,8 +9,6 @@ using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
-using SharpDX.XAudio2;
-
 using Toy_Synthesizer.Game.DigitalSignalProcessing;
 using Toy_Synthesizer.Game.Synthesizer.Frontend.Console;
 

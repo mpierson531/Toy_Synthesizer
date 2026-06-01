@@ -19,11 +19,13 @@ namespace Toy_Synthesizer.Game.UI
 {
     public class UIXmlParser
     {
-        public static ViewableList<Widget> Parse(Game game, string xmlContent, GroupWidget rootParent = null)
+        public static ViewableList<Widget> Parse(Game game, string xmlContent,
+                                                 GroupWidget rootParent = null,
+                                                 AABB? rootParentBaseBounds = null)
         {
             UIXmlParser parser = new UIXmlParser(game);
 
-            return parser.Parse(xmlContent, rootParent);
+            return parser.Parse(xmlContent, rootParent, rootParentBaseBounds);
         }
 
         private readonly Game game;
@@ -322,6 +324,7 @@ namespace Toy_Synthesizer.Game.UI
             {
                 widget = typeName switch
                 {
+                    "Button" => CreateButton(position, size, attributes),
                     "TextButton" => CreateTextButton(position, size, attributes),
                     "ImageButton" => CreateImageButton(position, size, attributes),
                     "Label" => CreateLabel(position, size, attributes),
@@ -345,13 +348,34 @@ namespace Toy_Synthesizer.Game.UI
             return widget;
         }
 
+        private Button CreateButton(Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+        {
+            // Must include a style.
+
+            if (!TryGetString(attributes, "style", out string styleName))
+            {
+                throw new InvalidOperationException("A plain button must include a style.");
+            }
+
+            if (!uiManager.TryGetStyle<Button.ButtonStyle>(styleName, out  Button.ButtonStyle style))
+            {
+                throw new InvalidOperationException($"A style with name \"{styleName}\" was not found.");
+            }
+
+            TryGetBool(attributes, "applyuxdata", out bool applyUXData);
+
+            return uiManager.Button(position, size, style, applyUXData: applyUXData);
+        }
+
         private TextButton CreateTextButton(Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
         {
             TryGetString(attributes, "text", out string text);
 
             TryGetAlignment(attributes, out Alignment alignment);
 
-            return uiManager.TextButton(position, size, text, alignment: alignment);
+            TryGetBool(attributes, "applyuxdata", out bool applyUXData);
+
+            return uiManager.TextButton(position, size, text, alignment: alignment, applyUXData: applyUXData);
         }
 
         private ImageButton CreateImageButton(Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
@@ -366,8 +390,10 @@ namespace Toy_Synthesizer.Game.UI
             {
                 style = uiManager.GetStyle<ImageButton.ImageButtonStyle>(styleName);
             }
-    
-            return uiManager.ImageButton(position, size, style);
+
+            TryGetBool(attributes, "applyuxdata", out bool applyUXData);
+
+            return uiManager.ImageButton(position, size, style, applyUXData: applyUXData);
         }
 
         private Label CreateLabel(Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
@@ -1286,12 +1312,12 @@ namespace Toy_Synthesizer.Game.UI
 
         private static bool ParseBool(string value)
         {
-            if (bool.TryParse(value, out bool result))
+            if (!bool.TryParse(value, out bool result))
             {
-                return result;
+                return false;
             }
 
-            return false;
+            return result;
         }
 
         private static float ParseFloat(string value, out bool isPercent)

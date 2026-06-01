@@ -1034,9 +1034,18 @@ namespace Toy_Synthesizer.Game.UI
                 HandOnHover = BaseButtonStyle.HandOnHover
             };
 
+            return Button(position, size, style,
+                          applyUXData: applyButtonUXData,
+                          uxData: uxData);
+        }
+
+        public Button Button(Vec2f position, Vec2f size, Button.ButtonStyle style,
+                             bool applyUXData = true,
+                             ButtonUXData? uxData = null)
+        {
             Button button = new Button(position, size, style);
 
-            if (applyButtonUXData)
+            if (applyUXData)
             {
                 ApplyButtonUXDataOrDefault(button, uxData);
             }
@@ -1882,6 +1891,84 @@ namespace Toy_Synthesizer.Game.UI
             return new AABB(position, size);
         }
 
+        public ImageButton CreateWindowCloseButton(Action onClose, 
+                                                   Vec2f position = default, 
+                                                   Vec2f size = default)
+        {
+            ImageButton.ImageButtonStyle closeButtonStyle = Copyables.Cast<ImageButton.ImageButtonStyle>(WindowCloseButtonStyle, false);
+
+            closeButtonStyle.ImageNormal = RenderData.Lines(GetWindowCloseButtonXLineData(out int lineCount), lineCount, linesClosed: false);
+
+            ImageButton closeButton = new ImageButton(position, size, closeButtonStyle.Normal, closeButtonStyle)
+            {
+                RenderIfTransparent = false,
+
+                TintImageWhenEngaged = false,
+                TintImageWhenOff = false,
+
+                ScaleImageOnScale = false,
+
+                OnClick = onClose
+            };
+
+            closeButton.ImageSize = new Vec2f(0.5f, 0.5f);
+            closeButton.ImagePosition = new Vec2f(0.25f, 0.25f);
+
+            return closeButton;
+        }
+
+        public ImageButton CreateWindowMinimizeButton(Action onMinimize,
+                                                      Vec2f position = default,
+                                                      Vec2f size = default)
+        {
+            ImageButton.ImageButtonStyle closeButtonStyle = Copyables.Cast<ImageButton.ImageButtonStyle>(WindowCloseButtonStyle, false);
+
+            closeButtonStyle.ImageNormal = RenderData.Lines(GetWindowMinimizeButtonLineData(out int lineCount), lineCount, linesClosed: false);
+
+            ImageButton closeButton = new ImageButton(position, size, closeButtonStyle.Normal, closeButtonStyle)
+            {
+                RenderIfTransparent = false,
+
+                TintImageWhenEngaged = false,
+                TintImageWhenOff = false,
+
+                ScaleImageOnScale = false,
+
+                OnClick = onMinimize
+            };
+
+            closeButton.ImageSize = new Vec2f(0.5f, 0.5f);
+            closeButton.ImagePosition = new Vec2f(0.25f, 0.25f);
+
+            return closeButton;
+        }
+
+        public ImageButton CreateWindowMaximizeButton(Action onMaximize,
+                                                      Vec2f position = default,
+                                                      Vec2f size = default)
+        {
+            ImageButton.ImageButtonStyle closeButtonStyle = Copyables.Cast<ImageButton.ImageButtonStyle>(WindowCloseButtonStyle, false);
+
+            closeButtonStyle.ImageNormal = RenderData.Lines(GetWindowMaximizeButtonLineData(out int lineCount), lineCount, linesClosed: false);
+
+            ImageButton closeButton = new ImageButton(position, size, closeButtonStyle.Normal, closeButtonStyle)
+            {
+                RenderIfTransparent = false,
+
+                TintImageWhenEngaged = false,
+                TintImageWhenOff = false,
+
+                ScaleImageOnScale = false,
+
+                OnClick = onMaximize
+            };
+
+            closeButton.ImageSize = new Vec2f(0.5f, 0.5f);
+            closeButton.ImagePosition = new Vec2f(0.25f, 0.25f);
+
+            return closeButton;
+        }
+
         private Drawer DrawerCommon(Vec2f position, Vec2f size, LayoutOrientation direction, DrawerUXData uxData, Button coverButton,
                                     Vec2f coverButtonOrigin,
                                     GroupWidget.GroupStyle style = null,
@@ -2177,7 +2264,7 @@ namespace Toy_Synthesizer.Game.UI
                 NormalizedChildSize = Vec2f.One,
                 NormalizedAdditionalSpacing = new Vec2f(0f, 0.3f),
                 NormalizedRetreatAmount = new Vec2f(-0.5f),
-                RetreatMode = UI.Drawer.RetreatFunction.RelativeToDrawer,
+                RetreatMode = GeoLib.GeoGraphics.UI.Widgets.Drawer.RetreatFunction.RelativeToDrawer,
 
                 ShowDuration = 0.2f,
 
@@ -2659,26 +2746,9 @@ namespace Toy_Synthesizer.Game.UI
             {
                 window.CloseButtonWidth = titleBarHeight;
 
-                ImageButton.ImageButtonStyle closeButtonStyle = Copyables.Cast<ImageButton.ImageButtonStyle>(WindowCloseButtonStyle, false);
-
-                closeButtonStyle.ImageNormal = RenderData.Lines(GetWindowCloseButtonXLineData(out int lineCount), lineCount, linesClosed: false);
-
-                ImageButton closeButton = new ImageButton(Vec2f.Zero, new Vec2f(200, 200), closeButtonStyle.Normal, closeButtonStyle)
-                {
-                    RenderIfTransparent = false,
-
-                    TintImageWhenEngaged = false,
-                    TintImageWhenOff = false,
-
-                    ScaleImageOnScale = false,
-
-                    OnClick = onClose
-                };
+                ImageButton closeButton = CreateWindowCloseButton(onClose);
 
                 window.CloseButton = closeButton;
-
-                closeButton.ImageSize = new Vec2f(0.5f, 0.5f);
-                closeButton.ImagePosition = new Vec2f(0.25f, 0.25f);
 
                 Interpolation closeButtonScaleInterpolation = Interpolation.Smooth2;
                 ScaleToAction closeButtonHoverAction = ActorActions.ScaleTo(new Vec2f(1.15f), 0.05f, closeButtonScaleInterpolation);
@@ -2937,7 +3007,7 @@ namespace Toy_Synthesizer.Game.UI
             };
         }
 
-        private LineData[] GetWindowCloseButtonXLineData(out int lineCount)
+        private static LineData[] GetWindowCloseButtonXLineData(out int lineCount)
         {
             float thickness = 0.15f;
             Color color = WindowCloseButtonImageTint;
@@ -2965,6 +3035,93 @@ namespace Toy_Synthesizer.Game.UI
                     (
                         start: new Vec2f(0.9f, 0.1f),
                         end: new Vec2f(0.1f, 0.9f)
+                    ),
+
+                    thickness: thickness,
+
+                    color: color
+                )
+            };
+        }
+
+        private static LineData[] GetWindowMinimizeButtonLineData(out int lineCount)
+        {
+            float thickness = 0.15f;
+            Color color = WindowCloseButtonImageTint;
+
+            lineCount = 1;
+
+            return new LineData[1]
+            {
+                new LineData
+                (
+                    line: new Line
+                    (
+                        start: new Vec2f(0.1f, 0.9f),
+                        end: new Vec2f(0.9f)
+                    ),
+
+                    thickness: thickness,
+
+                    color: color
+                )
+            };
+        }
+
+        private static LineData[] GetWindowMaximizeButtonLineData(out int lineCount)
+        {
+            float thickness = 0.15f;
+            Color color = WindowCloseButtonImageTint;
+
+            lineCount = 4;
+
+            return new LineData[4]
+            {
+                new LineData
+                (
+                    line: new Line
+                    (
+                        start: new Vec2f(0.1f),
+                        end: new Vec2f(0.1f, 0.9f)
+                    ),
+
+                    thickness: thickness,
+
+                    color: color
+                ),
+
+                new LineData
+                (
+                    line: new Line
+                    (
+                        start: new Vec2f(0.1f, 0.9f),
+                        end: new Vec2f(0.9f)
+                    ),
+
+                    thickness: thickness,
+
+                    color: color
+                ),
+
+                new LineData
+                (
+                    line: new Line
+                    (
+                        start: new Vec2f(0.9f),
+                        end: new Vec2f(0.9f, 0.1f)
+                    ),
+
+                    thickness: thickness,
+
+                    color: color
+                ),
+
+                new LineData
+                (
+                    line: new Line
+                    (
+                        start: new Vec2f(0.9f, 0.1f),
+                        end: new Vec2f(0.1f)
                     ),
 
                     thickness: thickness,
@@ -3041,6 +3198,11 @@ namespace Toy_Synthesizer.Game.UI
                     SetGroupStyle(group, (GroupWidget.GroupStyle)style);
                     break;
 
+                case Button button:
+                    button.Style = (Button.ButtonStyle)style;
+                    button.RefreshVisualState();
+                    break;
+
                 default:
                     return false;
             }
@@ -3048,13 +3210,27 @@ namespace Toy_Synthesizer.Game.UI
             return true;
         }
 
-        public T GetStyle<T>(string name)
+        public bool TryGetStyle(string name, out object style)
+        {
+            style = GetStyle(name);
+
+            return style is not null;
+        }
+
+        public bool TryGetStyle<T>(string name, out T style) where T : class
+        {
+            style = GetStyle<T>(name);
+
+            return style is not null;
+        }
+
+        public T GetStyle<T>(string name) where T : class
         {
             object style = GetStyle(name);
 
             if (style is null)
             {
-                return default;
+                return null;
             }
 
             return (T)style;
@@ -3368,7 +3544,7 @@ namespace Toy_Synthesizer.Game.UI
             Vec2f childPosition = child.Position;
             Vec2f childMax = childPosition + child.Size;
 
-            for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
+            for (int i = GeoLib.GeoGraphics.UI.Widgets.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
             {
                 PreciseGroupLayoutAdapter.WidgetState state = drawerLayoutStates[i];
 
@@ -3453,7 +3629,7 @@ namespace Toy_Synthesizer.Game.UI
 
             Vec2f childPosition = child.Position;
 
-            for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
+            for (int i = GeoLib.GeoGraphics.UI.Widgets.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
             {
                 PreciseGroupLayoutAdapter.WidgetState state = drawerLayoutStates[i];
 
@@ -3493,7 +3669,7 @@ namespace Toy_Synthesizer.Game.UI
 
             Vec2f childPosition = child.Position;
 
-            for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
+            for (int i = GeoLib.GeoGraphics.UI.Widgets.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
             {
                 Widget otherChild = drawerLayoutStates[i].widget;
 
@@ -3577,7 +3753,7 @@ namespace Toy_Synthesizer.Game.UI
 
             ReadOnlySpan<PreciseGroupLayoutAdapter.WidgetState> drawerLayoutStates = drawerLayoutAdapter.GetWidgetStates();
 
-            for (int i = UI.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
+            for (int i = GeoLib.GeoGraphics.UI.Widgets.Drawer.DRAWER_CONTENT_BEGIN_INDEX; i < drawerLayoutStates.Length; i++)
             {
                 PreciseGroupLayoutAdapter.WidgetState state = drawerLayoutStates[i];
 
@@ -3617,6 +3793,42 @@ namespace Toy_Synthesizer.Game.UI
         private static T GetPoolAs<T, E>() where T : IPool<E>, new() where E : IPoolable
         {
             return Pools.GetPoolAs<T, E>();
+        }
+
+        public class WindowCloseButtonTypeFactory : UIXmlParser.TypeFactory
+        {
+            public WindowCloseButtonTypeFactory() : base("WindowCloseButton")
+            {
+            }
+
+            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            {
+                return uiManager.CreateWindowCloseButton(onClose: null, position: position, size: size);
+            }
+        }
+
+        public class WindowMinimizeButtonTypeFactory : UIXmlParser.TypeFactory
+        {
+            public WindowMinimizeButtonTypeFactory() : base("WindowMinimizeButton")
+            {
+            }
+
+            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            {
+                return uiManager.CreateWindowMinimizeButton(onMinimize: null, position: position, size: size);
+            }
+        }
+
+        public class WindowMaximizeButtonTypeFactory : UIXmlParser.TypeFactory
+        {
+            public WindowMaximizeButtonTypeFactory() : base("WindowMaximizeButton")
+            {
+            }
+
+            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
+            {
+                return uiManager.CreateWindowMaximizeButton(onMaximize: null, position: position, size: size);
+            }
         }
     }
 }

@@ -16,6 +16,7 @@ using Microsoft.Xna.Framework.Input;
 using GeoLib;
 using GeoLib.GeoGraphics;
 using GeoLib.GeoGraphics.UI;
+using GeoLib.GeoGraphics.UI.WidgetAdapters;
 using GeoLib.GeoGraphics.UI.Widgets;
 using GeoLib.GeoInput;
 using GeoLib.GeoLogging;
@@ -51,6 +52,8 @@ namespace Toy_Synthesizer.Game
         public static readonly int NewLineLength;
 
         public const float BASE_FONT_SIZE = 21f;
+
+        private const string UI_STAGE_ROOT_NAME = "UIStageRoot";
 
         private static Game instance;
         public static Game Instance
@@ -217,6 +220,7 @@ namespace Toy_Synthesizer.Game
 
             uiStage.Root.PositionChildren = false;
             uiStage.Root.SizeChildren = false;
+            uiStage.Root.Name = UI_STAGE_ROOT_NAME;
 
             uiStage.Root.Adapters.Add(new PreciseGroupLayoutAdapter());
 
@@ -343,13 +347,11 @@ namespace Toy_Synthesizer.Game
             uiStage.Update(delta);
         }
 
-        public sealed override void Draw(float delta)
+        public sealed override void Draw(Rectangle viewportBounds, float delta)
         {
-            Geo.GraphicsDevice.Clear(Color.Black);
-
             RenderUI(delta);
 
-            FinalRender(delta);
+            FinalRender(ref viewportBounds, delta);
         }
 
         private void RenderUI(float delta)
@@ -359,7 +361,7 @@ namespace Toy_Synthesizer.Game
             uiStage.Draw(renderer, rasterizerState: Geo.DefaultRasterizerState, samplerState: uiSamplerState, textSamplerState: uiTextSamplerState);
         }
 
-        private void FinalRender(float delta)
+        private void FinalRender(ref Rectangle viewportBounds, float delta)
         {
             SetRenderTargetAndClear(finalRenderTarget, Color.Black);
 
@@ -374,7 +376,11 @@ namespace Toy_Synthesizer.Game
 
             SetRenderTargetAndClear(null, Color.Black);
 
+            renderer.ViewportOffset = viewportBounds.Location;
+
             DefaultRenderTarget(renderer, finalRenderTarget, Color.White);
+
+            renderer.ViewportOffset = Vec2f.Zero;
         }
 
         private void SetRenderTargetAndClear(RenderTarget2D renderTarget, Color clearColor)
@@ -879,6 +885,8 @@ namespace Toy_Synthesizer.Game
             {
                 finalRenderTarget.Dispose();
             }
+
+            Utils.Assert(width > 0 && height > 0);
 
             uiRenderTarget = new RenderTarget2D(Geo.GraphicsDevice, width, height);
             finalRenderTarget = new RenderTarget2D(Geo.GraphicsDevice, width, height);

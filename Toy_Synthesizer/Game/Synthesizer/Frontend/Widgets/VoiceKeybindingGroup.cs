@@ -11,6 +11,7 @@ using GeoLib;
 using GeoLib.GeoInput;
 using GeoLib.GeoGraphics;
 using GeoLib.GeoGraphics.UI;
+using GeoLib.GeoGraphics.UI.WidgetAdapters;
 using GeoLib.GeoGraphics.UI.Widgets;
 using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;

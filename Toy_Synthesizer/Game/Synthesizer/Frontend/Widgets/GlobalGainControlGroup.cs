@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using GeoLib;
 using GeoLib.GeoGraphics;
 using GeoLib.GeoGraphics.UI;
+using GeoLib.GeoGraphics.UI.WidgetAdapters;
 using GeoLib.GeoGraphics.UI.Widgets;
 using GeoLib.GeoGraphics.UI.Data;
 using GeoLib.GeoGraphics.UI.Data.Generic;
