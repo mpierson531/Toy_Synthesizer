@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using GeoLib;
 using GeoLib.GeoMaths;
+using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
 using Toy_Synthesizer.Game.Midi;
@@ -34,6 +35,22 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                 LPF_BaseCutoff = lpfBaseCutoff,
                 LPF_AdsrAmount = lpfAdsrAmount,
                 Oscillators = oscillators
+            };
+        }
+
+        public static Voice EmptyDefault(int sampleRate = AudioBackend.AudioBackend.SAMPLE_RATE)
+        {
+            return new Voice
+            {
+                Name = TextUtils.EmptyString,
+                Mix = PolyphonicSynthesizer.DEFAULT_MIX,
+                CenterFrequency = 0.0,
+                LPF = null,
+                Adsr = new AdsrEnvelope(sampleRate),
+                LPF_Adsr = new AdsrEnvelope(sampleRate),
+                LPF_BaseCutoff = PolyphonicSynthesizer.DEFAULT_LPFBASE_CUTOFF,
+                LPF_AdsrAmount = PolyphonicSynthesizer.DEFAULT_LPF_ADSR_AMOUNT,
+                Oscillators = null
             };
         }
 

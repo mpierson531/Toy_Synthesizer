@@ -484,7 +484,7 @@ namespace Toy_Synthesizer.Game.UI
             TextFieldDefaultTextFontEffect = FontSystemEffect.None;
             TextFieldDefaultTextHoveredFontEffect = TextFieldDefaultTextFontEffect;
             TextFieldCaretTint = Color.Black;
-            TextFieldTextPaddingX = 0.02f;
+            TextFieldTextPaddingX = 0.01f;
             TextFieldTextPaddingY = 0f;
             TextFieldCaretWidth = game.ScaleByDisplayResolution_Min(1f);
             NormalizedTextFieldCaretHeight = 0.9f;
@@ -593,7 +593,7 @@ namespace Toy_Synthesizer.Game.UI
             defaultDropDownButtonUXData = defaultButtonUXData;
             defaultDropDownButtonUXData.HandOnHover = true;
 
-            Vec2fValue textButtonTextHoverOffset = Vec2fValue.Normalized(0f, game.ScaleByDisplayResolution_Min(-0.04f));
+            Vec2fValue textButtonTextHoverOffset = Vec2fValue.Normalized(0f, -0.05f);
             Vec2fValue textButtonTextPressedOffset = Vec2fValue.NormalizedZero;
 
             RenderData textButtonNormalRenderData = RenderData.Custom(new Slice(TextButtonTexture, SliceCountMode.Nine, new SliceSizeData(TextButtonCornerRadius), tint: TextButtonNormalColor));
@@ -2315,6 +2315,10 @@ namespace Toy_Synthesizer.Game.UI
                 HandOnHover = drawerCoverButtonStyle.HandOnHover,
             };
 
+            drawerCoverTextButtonStyle.TextNormal.Padding = Vec2fValue.AbsoluteZero;
+            drawerCoverTextButtonStyle.TextHovered.Padding = Vec2fValue.AbsoluteZero;
+            drawerCoverTextButtonStyle.TextPressed.Padding = Vec2fValue.AbsoluteZero;
+
             drawerCoverTextButtonStyle.TextNormal.FontColor = buttonNormalColor;
             drawerCoverTextButtonStyle.TextHovered.FontColor = buttonHoveredColor;
             drawerCoverTextButtonStyle.TextPressed.FontColor = buttonPressedColor;
@@ -3775,6 +3779,589 @@ namespace Toy_Synthesizer.Game.UI
                                                                }));
                 }
             }
+        }
+
+        // Will attempt to automatically determine the spacing used to shift the group.
+        //
+        // If group is a Drawer:
+        //      if startIndex is null, it will be Drawer.DRAWER_CONTENT_BEGIN_INDEX. 
+        //      if layoutOrientation is null, it will be drawer.Direction.
+        //
+        // If group is not a Drawer:
+        //      if startIndex is null, it will be 0.
+        //      if layoutOrientation is null, it will be LayoutOrientation.Vertical.
+        public static void ShiftGroup_ChildAdded(GroupWidget group, Widget child,
+                                                 int? startIndex = null,
+                                                 LayoutOrientation? layoutOrientation = null)
+        {
+            PreciseGroupLayoutAdapter layoutAdapter = group.Adapters.FindFirstOfType<PreciseGroupLayoutAdapter>();
+
+            if (layoutAdapter is not null)
+            {
+                Vec2f shiftDelta = FindGroupSpacingInternal_PreciseGroupLayoutAdapter(group, child, layoutAdapter, startIndex, layoutOrientation);
+
+                ShiftGroup_ChildAddedInternal_PreciseGroupLayoutAdapter(group, child, layoutAdapter, shiftDelta, startIndex, layoutOrientation);
+            }
+            else
+            {
+                Vec2f shiftDelta = FindGroupSpacingInternal(group, child, startIndex, layoutOrientation);
+
+                ShiftGroup_ChildAddedInternal(group, child, shiftDelta, startIndex, layoutOrientation);
+            }
+        }
+
+        // Will attempt to automatically determine the spacing used to shift the group.
+        //
+        // If group is a Drawer:
+        //      if startIndex is null, it will be Drawer.DRAWER_CONTENT_BEGIN_INDEX. 
+        //      if layoutOrientation is null, it will be drawer.Direction.
+        //
+        // If group is not a Drawer:
+        //      if startIndex is null, it will be 0.
+        //      if layoutOrientation is null, it will be LayoutOrientation.Vertical.
+        public static void ShiftGroup_ChildRemoved(GroupWidget group, Widget child,
+                                                   int? startIndex = null,
+                                                   LayoutOrientation? layoutOrientation = null)
+        {
+            PreciseGroupLayoutAdapter layoutAdapter = group.Adapters.FindFirstOfType<PreciseGroupLayoutAdapter>();
+
+            if (layoutAdapter is not null)
+            {
+                Vec2f shiftDelta = FindGroupSpacingInternal_PreciseGroupLayoutAdapter(group, child, layoutAdapter, startIndex, layoutOrientation);
+
+                ShiftGroup_ChildRemovedInternal_PreciseGroupLayoutAdapter(group, child, layoutAdapter, shiftDelta, startIndex, layoutOrientation);
+            }
+            else
+            {
+                Vec2f shiftDelta = FindGroupSpacingInternal(group, child, startIndex, layoutOrientation);
+
+                ShiftGroup_ChildRemovedInternal(group, child, shiftDelta, startIndex, layoutOrientation);
+            }
+        }
+
+        // If group is a Drawer:
+        //      if startIndex is null, it will be Drawer.DRAWER_CONTENT_BEGIN_INDEX. 
+        //      if layoutOrientation is null, it will be drawer.Direction.
+        //
+        // If group is not a Drawer:
+        //      if startIndex is null, it will be 0.
+        //      if layoutOrientation is null, it will be LayoutOrientation.Vertical.
+        public static void ShiftGroup_ChildAdded(GroupWidget group, Widget child, Vec2f shiftDelta,
+                                                 int? startIndex = null,
+                                                 LayoutOrientation? layoutOrientation = null)
+        {
+            PreciseGroupLayoutAdapter layoutAdapter = group.Adapters.FindFirstOfType<PreciseGroupLayoutAdapter>();
+
+            if (layoutAdapter is not null)
+            {
+                ShiftGroup_ChildAddedInternal_PreciseGroupLayoutAdapter(group, child, layoutAdapter, shiftDelta, startIndex, layoutOrientation);
+            }
+            else
+            {
+                ShiftGroup_ChildAddedInternal(group, child, shiftDelta, startIndex, layoutOrientation);
+            }
+        }
+
+        // If group is a Drawer:
+        //      if startIndex is null, it will be Drawer.DRAWER_CONTENT_BEGIN_INDEX. 
+        //      if layoutOrientation is null, it will be drawer.Direction.
+        //
+        // If group is not a Drawer:
+        //      if startIndex is null, it will be 0.
+        //      if layoutOrientation is null, it will be LayoutOrientation.Vertical.
+        public static void ShiftGroup_ChildRemoved(GroupWidget group, Widget child, Vec2f shiftDelta, 
+                                                   int? startIndex = null, 
+                                                   LayoutOrientation? layoutOrientation = null)
+        {
+            PreciseGroupLayoutAdapter layoutAdapter = group.Adapters.FindFirstOfType<PreciseGroupLayoutAdapter>();
+
+            if (layoutAdapter is not null)
+            {
+                ShiftGroup_ChildRemovedInternal_PreciseGroupLayoutAdapter(group, child, layoutAdapter, shiftDelta, startIndex, layoutOrientation);
+            }
+            else
+            {
+                ShiftGroup_ChildRemovedInternal(group, child, shiftDelta, startIndex, layoutOrientation);
+            }
+        }
+
+        private static void ShiftGroup_ChildAddedInternal(GroupWidget group,
+                                                          Widget child,
+                                                          Vec2f shiftDelta,
+                                                          int? startIndex,
+                                                          LayoutOrientation? layoutOrientation)
+        {
+            if (shiftDelta.IsZero())
+            {
+                return;
+            }
+
+            bool isDrawer = group is GeoLib.GeoGraphics.UI.Widgets.Drawer;
+
+            int realStartIndex;
+            LayoutOrientation realLayoutOrientation;
+
+            if (startIndex.HasValue)
+            {
+                realStartIndex = startIndex.Value;
+            }
+            else
+            {
+                realStartIndex = isDrawer ? GeoLib.GeoGraphics.UI.Widgets.Drawer.DRAWER_CONTENT_BEGIN_INDEX : 0;
+            }
+
+            if (layoutOrientation.HasValue)
+            {
+                realLayoutOrientation = layoutOrientation.Value;
+            }
+            else
+            {
+                realLayoutOrientation = isDrawer ? ((GeoLib.GeoGraphics.UI.Widgets.Drawer)group).Direction : LayoutOrientation.Vertical;
+            }
+
+            for (int i = realStartIndex; i < group.Count; i++)
+            {
+                Widget currentChild = group[i];
+
+                if ((isDrawer && currentChild == ((GeoLib.GeoGraphics.UI.Widgets.Drawer)group).CoverButton) || currentChild == child)
+                {
+                    continue;
+                }
+
+                bool isAfter = (realLayoutOrientation == LayoutOrientation.Horizontal && GeoMath.GTE_Precise(currentChild.Position.X, child.Position.X)) ||
+                               (realLayoutOrientation == LayoutOrientation.Vertical && GeoMath.GTE_Precise(currentChild.Position.Y, child.Position.Y));
+
+                if (isAfter)
+                {
+                    currentChild.Position += shiftDelta;
+                }
+            }
+        }
+
+        private static void ShiftGroup_ChildAddedInternal_PreciseGroupLayoutAdapter(GroupWidget group,
+                                                                                    Widget child,
+                                                                                    PreciseGroupLayoutAdapter layoutAdapter,
+                                                                                    Vec2f shiftDelta,
+                                                                                    int? startIndex,
+                                                                                    LayoutOrientation? layoutOrientation)
+        {
+            Utils.Assert(layoutAdapter is not null, "layoutAdapter was null.");
+
+            if (shiftDelta.IsZero())
+            {
+                return;
+            }
+
+            ReadOnlySpan<PreciseGroupLayoutAdapter.WidgetState> layoutStates = layoutAdapter.GetWidgetStates();
+
+            bool isDrawer = group is GeoLib.GeoGraphics.UI.Widgets.Drawer;
+
+            int realStartIndex;
+            LayoutOrientation realLayoutOrientation;
+
+            if (startIndex.HasValue)
+            {
+                realStartIndex = startIndex.Value;
+            }
+            else
+            {
+                realStartIndex = isDrawer ? GeoLib.GeoGraphics.UI.Widgets.Drawer.DRAWER_CONTENT_BEGIN_INDEX : 0;
+            }
+
+            if (layoutOrientation.HasValue)
+            {
+                realLayoutOrientation = layoutOrientation.Value;
+            }
+            else
+            {
+                realLayoutOrientation = isDrawer ? ((GeoLib.GeoGraphics.UI.Widgets.Drawer)group).Direction : LayoutOrientation.Vertical;
+            }
+
+            for (int i = realStartIndex; i < layoutStates.Length; i++)
+            {
+                PreciseGroupLayoutAdapter.WidgetState state = layoutStates[i];
+
+                if ((isDrawer && state.widget == ((GeoLib.GeoGraphics.UI.Widgets.Drawer)group).CoverButton) || state.widget == child)
+                {
+                    continue;
+                }
+
+                bool isAfter = (realLayoutOrientation == LayoutOrientation.Horizontal && GeoMath.GTE_Precise(state.widget.Position.X, child.Position.X)) ||
+                               (realLayoutOrientation == LayoutOrientation.Vertical && GeoMath.GTE_Precise(state.widget.Position.Y, child.Position.Y));
+
+                if (isAfter)
+                {
+                    layoutAdapter.TrySetNormalizedBounds(state.widget,
+                                                         PreciseGroupLayoutAdapter.GetNormalizedBounds(group, new AABB
+                                                         {
+                                                             Position = state.widget.Position + shiftDelta,
+                                                             Size = state.widget.Size
+                                                         }));
+                }
+            }
+        }
+
+        private static void ShiftGroup_ChildRemovedInternal(GroupWidget group,
+                                                            Widget child,
+                                                            Vec2f shiftDelta,
+                                                            int? startIndex,
+                                                            LayoutOrientation? layoutOrientation)
+        {
+            if (shiftDelta.IsZero())
+            {
+                return;
+            }
+
+            bool isDrawer = group is GeoLib.GeoGraphics.UI.Widgets.Drawer;
+
+            int realStartIndex;
+            LayoutOrientation realLayoutOrientation;
+
+            if (startIndex.HasValue)
+            {
+                realStartIndex = startIndex.Value;
+            }
+            else
+            {
+                realStartIndex = isDrawer ? GeoLib.GeoGraphics.UI.Widgets.Drawer.DRAWER_CONTENT_BEGIN_INDEX : 0;
+            }
+
+            if (layoutOrientation.HasValue)
+            {
+                realLayoutOrientation = layoutOrientation.Value;
+            }
+            else
+            {
+                realLayoutOrientation = isDrawer ? ((GeoLib.GeoGraphics.UI.Widgets.Drawer)group).Direction : LayoutOrientation.Vertical;
+            }
+
+            for (int i = realStartIndex; i < group.Count; i++)
+            {
+                Widget currentChild = group[i];
+
+                if ((isDrawer && currentChild == ((GeoLib.GeoGraphics.UI.Widgets.Drawer)group).CoverButton) || currentChild == child)
+                {
+                    continue;
+                }
+
+                bool isAfter = (realLayoutOrientation == LayoutOrientation.Horizontal && GeoMath.GTE_Precise(currentChild.Position.X, child.Position.X)) ||
+                               (realLayoutOrientation == LayoutOrientation.Vertical && GeoMath.GTE_Precise(currentChild.Position.Y, child.Position.Y));
+
+                if (isAfter)
+                {
+                    currentChild.Position -= shiftDelta;
+                }
+            }
+        }
+
+        private static void ShiftGroup_ChildRemovedInternal_PreciseGroupLayoutAdapter(GroupWidget group,
+                                                                                      Widget child,
+                                                                                      PreciseGroupLayoutAdapter layoutAdapter,
+                                                                                      Vec2f shiftDelta,
+                                                                                      int? startIndex,
+                                                                                      LayoutOrientation? layoutOrientation)
+        {
+            Utils.Assert(layoutAdapter is not null, "layoutAdapter was null.");
+
+            if (shiftDelta.IsZero())
+            {
+                return;
+            }
+
+            ReadOnlySpan<PreciseGroupLayoutAdapter.WidgetState> layoutStates = layoutAdapter.GetWidgetStates();
+
+            bool isDrawer = group is GeoLib.GeoGraphics.UI.Widgets.Drawer;
+
+            int realStartIndex;
+            LayoutOrientation realLayoutOrientation;
+
+            if (startIndex.HasValue)
+            {
+                realStartIndex = startIndex.Value;
+            }
+            else
+            {
+                realStartIndex = isDrawer ? GeoLib.GeoGraphics.UI.Widgets.Drawer.DRAWER_CONTENT_BEGIN_INDEX : 0;
+            }
+
+            if (layoutOrientation.HasValue)
+            {
+                realLayoutOrientation = layoutOrientation.Value;
+            }
+            else
+            {
+                realLayoutOrientation = isDrawer ? ((GeoLib.GeoGraphics.UI.Widgets.Drawer)group).Direction : LayoutOrientation.Vertical;
+            }
+
+            for (int i = realStartIndex; i < layoutStates.Length; i++)
+            {
+                PreciseGroupLayoutAdapter.WidgetState state = layoutStates[i];
+
+                if ((isDrawer && state.widget == ((GeoLib.GeoGraphics.UI.Widgets.Drawer)group).CoverButton) || state.widget == child)
+                {
+                    continue;
+                }
+
+                bool isAfter = (realLayoutOrientation == LayoutOrientation.Horizontal && GeoMath.GTE_Precise(state.widget.Position.X, child.Position.X)) ||
+                               (realLayoutOrientation == LayoutOrientation.Vertical && GeoMath.GTE_Precise(state.widget.Position.Y, child.Position.Y));
+
+                if (isAfter)
+                {
+                    layoutAdapter.TrySetNormalizedBounds(state.widget,
+                                                         PreciseGroupLayoutAdapter.GetNormalizedBounds(group, new AABB
+                                                         {
+                                                            Position = state.widget.Position - shiftDelta,
+                                                            Size = state.widget.Size
+                                                         }));
+                }
+            }
+        }
+
+        // If group is a Drawer:
+        //      if startIndex is null, it will be Drawer.DRAWER_CONTENT_BEGIN_INDEX. 
+        //      if layoutOrientation is null, it will be drawer.Direction.
+        //
+        // If group is not a Drawer:
+        //      if startIndex is null, it will be 0.
+        //      if layoutOrientation is null, it will be LayoutOrientation.Vertical.
+        private static Vec2f FindGroupSpacingInternal(GroupWidget group,
+                                                      Widget child,
+                                                      int? startIndex = null,
+                                                      LayoutOrientation? layoutOrientation = null)
+        {
+            // Attempts to find spacing between removed child and closest child that was after the removed child (in terms of position).
+
+            bool isDrawer = group is GeoLib.GeoGraphics.UI.Widgets.Drawer;
+
+            int realStartIndex;
+            LayoutOrientation realLayoutOrientation;
+
+            if (startIndex.HasValue)
+            {
+                realStartIndex = startIndex.Value;
+            }
+            else
+            {
+                realStartIndex = isDrawer ? GeoLib.GeoGraphics.UI.Widgets.Drawer.DRAWER_CONTENT_BEGIN_INDEX : 0;
+            }
+
+            if (layoutOrientation.HasValue)
+            {
+                realLayoutOrientation = layoutOrientation.Value;
+            }
+            else
+            {
+                realLayoutOrientation = isDrawer ? ((GeoLib.GeoGraphics.UI.Widgets.Drawer)group).Direction : LayoutOrientation.Vertical;
+            }
+
+            Vec2f shiftDelta = Vec2f.Zero;
+            float minDistance = float.MaxValue;
+            bool spacingFound = false;
+            bool allNeighborsHaveEqualPositions = true;
+
+            Vec2f childPosition = child.Position;
+
+            for (int i = realStartIndex; i < group.Count; i++)
+            {
+                Widget otherChild = group[i];
+
+                if ((isDrawer && otherChild == ((GeoLib.GeoGraphics.UI.Widgets.Drawer)group).CoverButton || otherChild == child))
+                {
+                    continue;
+                }
+
+                Vec2f currentStatePosition = otherChild.Position;
+
+                if (realLayoutOrientation == LayoutOrientation.Horizontal && GeoMath.GTE_Precise(currentStatePosition.X, childPosition.X))
+                {
+                    spacingFound = true;
+
+                    if (GeoMath.Equals_Precise(currentStatePosition.X, childPosition.X))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        allNeighborsHaveEqualPositions = false;
+                    }
+
+                    float dist = currentStatePosition.X - child.GetMaxX();
+
+                    if (dist < minDistance)
+                    {
+                        minDistance = dist;
+                    }
+                }
+                else if (realLayoutOrientation == LayoutOrientation.Vertical && GeoMath.GTE_Precise(currentStatePosition.Y, childPosition.Y))
+                {
+                    spacingFound = true;
+
+                    if (GeoMath.Equals_Precise(currentStatePosition.Y, childPosition.Y))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        allNeighborsHaveEqualPositions = false;
+                    }
+
+                    float dist = currentStatePosition.Y - child.GetMaxY();
+
+                    if (dist < minDistance)
+                    {
+                        minDistance = dist;
+                    }
+                }
+            }
+
+            if (spacingFound)
+            {
+                if (realLayoutOrientation == LayoutOrientation.Horizontal)
+                {
+                    shiftDelta.X = child.Size.X;
+
+                    if (!allNeighborsHaveEqualPositions)
+                    {
+                        shiftDelta.X += minDistance;
+                    }
+                }
+                else if (realLayoutOrientation == LayoutOrientation.Vertical)
+                {
+                    shiftDelta.Y = child.Size.Y;
+
+                    if (!allNeighborsHaveEqualPositions)
+                    {
+                        shiftDelta.Y += minDistance;
+                    }
+                }
+            }
+
+            return shiftDelta;
+        }
+
+        // If group is a Drawer:
+        //      if startIndex is null, it will be Drawer.DRAWER_CONTENT_BEGIN_INDEX. 
+        //      if layoutOrientation is null, it will be drawer.Direction.
+        //
+        // If group is not a Drawer:
+        //      if startIndex is null, it will be 0.
+        //      if layoutOrientation is null, it will be LayoutOrientation.Vertical.
+        private static Vec2f FindGroupSpacingInternal_PreciseGroupLayoutAdapter(GroupWidget group, 
+                                                                                Widget child,
+                                                                                PreciseGroupLayoutAdapter layoutAdapter,
+                                                                                int? startIndex = null,
+                                                                                LayoutOrientation? layoutOrientation = null)
+        {
+            // Attempts to find spacing between removed child and closest child that was after the removed child (in terms of position).
+
+            ReadOnlySpan<PreciseGroupLayoutAdapter.WidgetState> layoutStates = layoutAdapter.GetWidgetStates();
+
+            bool isDrawer = group is GeoLib.GeoGraphics.UI.Widgets.Drawer;
+
+            int realStartIndex;
+            LayoutOrientation realLayoutOrientation;
+
+            if (startIndex.HasValue)
+            {
+                realStartIndex = startIndex.Value;
+            }
+            else
+            {
+                realStartIndex = isDrawer ? GeoLib.GeoGraphics.UI.Widgets.Drawer.DRAWER_CONTENT_BEGIN_INDEX : 0;
+            }
+
+            if (layoutOrientation.HasValue)
+            {
+                realLayoutOrientation = layoutOrientation.Value;
+            }
+            else
+            {
+                realLayoutOrientation = isDrawer ? ((GeoLib.GeoGraphics.UI.Widgets.Drawer)group).Direction : LayoutOrientation.Vertical;
+            }
+
+            Vec2f shiftDelta = Vec2f.Zero;
+            float minDistance = float.MaxValue;
+            bool spacingFound = false;
+            bool allNeighborsHaveEqualPositions = true;
+
+            Vec2f childPosition = child.Position;
+
+            for (int i = realStartIndex; i < layoutStates.Length; i++)
+            {
+                Widget otherChild = layoutStates[i].widget;
+
+                if ((isDrawer && otherChild == ((GeoLib.GeoGraphics.UI.Widgets.Drawer)group).CoverButton || otherChild == child))
+                {
+                    continue;
+                }
+
+                Vec2f currentStatePosition = otherChild.Position;
+
+                if (realLayoutOrientation == LayoutOrientation.Horizontal && GeoMath.GTE_Precise(currentStatePosition.X, childPosition.X))
+                {
+                    spacingFound = true;
+
+                    if (GeoMath.Equals_Precise(currentStatePosition.X, childPosition.X))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        allNeighborsHaveEqualPositions = false;
+                    }
+
+                    float dist = currentStatePosition.X - child.GetMaxX();
+
+                    if (dist < minDistance)
+                    {
+                        minDistance = dist;
+                    }
+                }
+                else if (realLayoutOrientation == LayoutOrientation.Vertical && GeoMath.GTE_Precise(currentStatePosition.Y, childPosition.Y))
+                {
+                    spacingFound = true;
+
+                    if (GeoMath.Equals_Precise(currentStatePosition.Y, childPosition.Y))
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        allNeighborsHaveEqualPositions = false;
+                    }
+
+                    float dist = currentStatePosition.Y - child.GetMaxY();
+
+                    if (dist < minDistance)
+                    {
+                        minDistance = dist;
+                    }
+                }
+            }
+
+            if (spacingFound)
+            {
+                if (realLayoutOrientation == LayoutOrientation.Horizontal)
+                {
+                    shiftDelta.X = child.Size.X;
+
+                    if (!allNeighborsHaveEqualPositions)
+                    {
+                        shiftDelta.X += minDistance;
+                    }
+                }
+                else if (realLayoutOrientation == LayoutOrientation.Vertical)
+                {
+                    shiftDelta.Y = child.Size.Y;
+
+                    if (!allNeighborsHaveEqualPositions)
+                    {
+                        shiftDelta.Y += minDistance;
+                    }
+                }
+            }
+
+            return shiftDelta;
         }
 
         private static void AddAction_OnRemoved_Return<T>(T action) where T : ActorAction

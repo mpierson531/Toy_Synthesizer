@@ -100,6 +100,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private Button addOscillatorButton;
         private LabelTooltip addOscillatorsButtonTooltip;
 
+        private Button removeButton;
+        private LabelTooltip removeButtonTooltip;
+
         private readonly ViewableList<KeybindingGroupWidgets> keybindingGroupWidgets;
 
         private Drawer keybindingsDrawer;
@@ -217,6 +220,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             addOscillatorButton.OnClick += AddOscillatorButton_OnClick;
 
+            removeButton = FindAsByNameDeepSearch<Button>(RemoveButtonName);
+
+            removeButton.OnClick += RemoveButton_OnClick;
+
             keybindingsDrawer = FindAsByNameDeepSearch<Drawer>(KeybindingsDrawerName);
 
             addKeybindingButton = FindAsByNameDeepSearch<Button>(AddKeybindingButtonName);
@@ -229,6 +236,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private void InitTooltips(UIManager uiManager)
         {
             addOscillatorsButtonTooltip = uiManager.AddTextTooltip(addOscillatorButton, "Click to add an oscillator");
+
+            removeButtonTooltip = uiManager.AddTextTooltip(removeButton, "Click to remove this voice");
 
             addKeybindingButtonTooltip = uiManager.AddTextTooltip(addKeybindingButton, "Click to add a keybinding");
 
@@ -315,7 +324,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             if (!oscillatorsDrawer.Contains(oscillatorControlGroup))
             {
-                throw new InvalidOperationException("Oscillator does not exist.");
+                throw new InvalidOperationException("Oscillator does not exist in UI.");
             }
 
             game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.RemoveVoiceOscillator(Voice, oscillatorControlGroup.oscillator));
@@ -325,6 +334,16 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             oscillatorsDrawer.RemoveChild(oscillatorControlGroup);
 
             Layout();
+        }
+
+        private void RemoveButton_OnClick()
+        {
+            if (removeButtonTooltip?.IsShowing ?? false)
+            {
+                removeButtonTooltip.Hide();
+            }
+
+            voiceFrontend.RemoveVoiceAndGroup(this);
         }
 
         private void AddKeybindingButton_OnClick()
@@ -675,12 +694,21 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                TreatAsScalarPercentage=""false""
                Name=""{FrequencyTextFieldName}""/>
 
-    <VoiceMixControlGroup Position=""(5%, 20.75%)""
+    <TextButton
+                 Position=""(5%, 17.625%)""
+                 Size=""(12%, 9%)""
+                 Text=""-""
+                 Alignment=""Center""
+                 SizeMode=""Min""
+                 FitText=""false""
+                 Name=""{RemoveButtonName}""/>
+
+    <VoiceMixControlGroup Position=""(5%, 28.25%)""
                           Size=""(90%, 18.5%)""/>
 
 <!--ADSR-->
 
-    <Drawer Position=""(5%, 42%)""
+    <Drawer Position=""(5%, 52%)""
             Size=""(30%, 11%)"" 
             CoverText=""ADSR""
             Name=""{AdsrDrawerName}"">
@@ -757,7 +785,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
 <!-- Oscillators !-->
 
-    <Drawer Position=""(5%, 58%)"" 
+    <Drawer Position=""(5%, 68.25%)"" 
             Size=""(30%, 11%)"" 
             CoverText=""Oscillators""
             Name=""{OscillatorsDrawerName}"">
@@ -772,7 +800,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Name=""{AddOscillatorButtonName}""/>
     </Drawer>
 
-    <Drawer Position=""(5%, 74%)"" 
+    <Drawer Position=""(5%, 84.5%)"" 
             Size=""(30%, 11%)"" 
             CoverText=""Keybindings""
             RenderTextPosition=""(-2.5%, 0%)""
@@ -803,14 +831,17 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             StringBuilder stringBuilder = new StringBuilder();
 
-            for (int index = 0; index < Voice.Oscillators.Count; index++)
+            if (Voice.Oscillators is not null && !Voice.Oscillators.IsEmpty)
             {
-                string oscillatorXml = GetOscillatorUIXml(currentPositionY_Percent);
+                for (int index = 0; index < Voice.Oscillators.Count; index++)
+                {
+                    string oscillatorXml = GetOscillatorUIXml(currentPositionY_Percent);
 
-                stringBuilder.Append(oscillatorXml);
-                stringBuilder.AppendLine();
+                    stringBuilder.Append(oscillatorXml);
+                    stringBuilder.AppendLine();
 
-                currentPositionY_Percent += verticalSpacing_Percent;
+                    currentPositionY_Percent += verticalSpacing_Percent;
+                }
             }
 
             return $@"<Layout>
@@ -945,6 +976,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private const string OscillatorsDrawerName = "OscillatorsDrawer";
         private const string AddOscillatorButtonName = "AddOscillatorButton";
+
+        private const string RemoveButtonName = "RemoveButton";
 
         private const string KeybindingsDrawerName = "KeybindingsDrawer";
         private const string AddKeybindingButtonName = "AddKeybindingButton";

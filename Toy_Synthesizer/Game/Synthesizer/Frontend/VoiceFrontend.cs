@@ -53,9 +53,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
         private readonly UIXmlParser uiXmlParser;
 
+        private Window voicesWindow;
         private GroupWidget voicesGroup;
 
         private DropDownWidget voiceUtilitiesDropDown;
+        private Button addVoiceButton;
+        private LabelTooltip addVoiceButtonTooltip;
 
         private readonly object lockObject = new object();
 
@@ -379,6 +382,14 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
                   CoverButtonText=""Utilities""
                   Name=""{VoiceUtilitiesDropDownName}""/>
 
+        <TextButton Position=""(89.25%, 2.15625%)""
+                    Size=""(5.75%, 4.3125%)""
+                    Text=""+""
+                    Alignment=""Center""
+                    SizeMode=""Min""
+                    FitText=""false""
+                    Name=""{AddVoiceButtonName}""/>
+
     </Window>
 
 </Layout>";
@@ -386,31 +397,26 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             ViewableList<Widget> widgets = uiXmlParser.Parse(xml);
 
-            Window window = (Window)widgets[0];
+            voicesWindow = (Window)widgets[0];
 
-            voicesGroup = (GroupWidget)window[window.ComputeEffectiveChildBeginOffset()];
+            voicesGroup = (GroupWidget)voicesWindow[voicesWindow.ComputeEffectiveChildBeginOffset()];
 
             float currentY = voicesGroup.Position.Y;
 
             AudioSourceCommand forEachVoiceCommand = SynthesizerCommands.ForEachVoiceAction(delegate (Voice voice)
             {
-                InitVoiceGroup(voice, ref currentY, offsetYFirst: false);
+                InitVoiceGroup(voice, ref currentY);
             });
 
             synthesizer.SendCommand(ref forEachVoiceCommand);
 
             game.AddUIWidgets(widgets);
 
-            synthesizer.OnVoiceAdded += delegate (PolyphonicSynthesizer polyphonic, Voice voice)
-            {
-                float currentY = voicesGroup[voicesGroup.Count - 1].Position.Y;
-
-                InitVoiceGroup(voice, ref currentY, offsetYFirst: true);
-            };
-
-            voiceUtilitiesDropDown = window.FindAsByNameDeepSearch<DropDownWidget>(VoiceUtilitiesDropDownName);
+            voiceUtilitiesDropDown = voicesWindow.FindAsByNameDeepSearch<DropDownWidget>(VoiceUtilitiesDropDownName);
 
             voiceUtilitiesDropDown.OnSelect += OnVoiceUtilitySelect;
+
+            InitAddVoiceButton(uiManager);
         }
 
         private void OnVoiceUtilitySelect(Button _, int index)
@@ -420,7 +426,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             action();
         }
 
-        private void InitVoiceGroup(Voice voice, ref float currentY, bool offsetYFirst)
+        private void InitVoiceGroup(Voice voice, float currentY)
+        {
+            InitVoiceGroup(voice, ref currentY);
+        }
+
+        private void InitVoiceGroup(Voice voice, ref float currentY)
         {
             float scrollPaneGroupSpacing = voicesGroup.Size.Min() * 0.02f;
 
@@ -428,11 +439,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             float groupY = currentY + scrollPaneGroupSpacing;
             float groupW = voicesGroup.Size.X * 0.925f;
             float groupH = voicesGroup.Size.Y * 0.35f;
-
-            if (offsetYFirst)
-            {
-                currentY += groupH + voicesGroup.Size.Y * 0.1f;
-            }
 
             string xml = "<Layout>" + Environment.NewLine;
 
@@ -455,6 +461,47 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             voicesGroup.AddChildRange(voiceGroups);
         }
 
+        private void AddVoiceAndGroup()
+        {
+            Voice voice = Voice.EmptyDefault();
+
+            KeyBinding keybinding = CreateEmptyKeybinding();
+
+            voiceKeybindings.Add(voice, keybinding);
+            voiceKeybindingsInputHandled.Add(voice, false);
+
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.AddVoice(voice, addDefaultOscillatorsIfEmpty: false));
+
+            InitVoiceGroup(voice, currentY: voicesGroup.Position.Y);
+
+            VoiceGroup voiceGroup = (VoiceGroup)voicesGroup.Last();
+
+            UIManager.ShiftGroup_ChildAdded(voicesGroup, voiceGroup);
+
+            voicesGroup.Layout();
+        }
+
+        internal void RemoveVoiceAndGroup(VoiceGroup voiceGroup)
+        {
+            if (!voicesGroup.Contains(voiceGroup))
+            {
+                throw new InvalidOperationException("Voice does not exist in UI.");
+            }
+
+            Voice voice = voiceGroup.Voice;
+
+            voiceKeybindings.Remove(voice);
+            voiceKeybindingsInputHandled.Remove(voice);
+
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.RemoveVoice(voice));
+
+            UIManager.ShiftGroup_ChildRemoved(voicesGroup, voiceGroup);
+
+            voicesGroup.RemoveChild(voiceGroup);
+
+            voicesGroup.Layout();
+        }
+
         private void InitUtilityActions(out string[] actionNames, out Action[] actions)
         {
             actionNames = new string[] 
@@ -473,6 +520,15 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
                 ShiftAllByOctave_One,
                 ShiftAllByOctave_MinusOne };
+        }
+
+        private void InitAddVoiceButton(UIManager uiManager)
+        {
+            addVoiceButton = voicesWindow.FindAsByNameDeepSearch<Button>(AddVoiceButtonName);
+
+            addVoiceButton.OnClick += AddVoiceAndGroup;
+
+            addVoiceButtonTooltip = uiManager.AddTextTooltip(addVoiceButton, "Click to add an empty voice");
         }
 
         // TODO: In some of the utility methods, I'm locking. Maybe find another way without locking.
@@ -557,6 +613,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         }
 
         private const string VoiceUtilitiesDropDownName = "VoiceUtiltiesDropDown";
+        private const string AddVoiceButtonName = "AddVoiceButton";
 
         private static Dictionary<Voice, KeyBinding> GetDefaultKeyVoiceBindings()
         {
@@ -586,10 +643,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
                 for (int octaveLayer = startOctave; octaveLayer < startOctave + 1 + additionalLayerCount; octaveLayer++)
                 {
-                    KeyBinding keybinding = new KeyBinding(modifiers: null, keys: new KeyBinding.Key[] { new KeyBinding.Key(key, PressMode.Down) },
-                                                       holdDelay: 0,
-                                                       repeatDelay: 0,
-                                                       respectRepeatDelay: false);
+                    KeyBinding keybinding = CreateKeybinding(key);
 
                     int noteValue = (octaveLayer + 1) * 12 + offset;
 
@@ -602,6 +656,20 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             }
 
             return voices.ToDictionary(x => x.Item1, x => x.Item2);
+        }
+
+        private static KeyBinding CreateKeybinding(Keys key)
+        {
+            return new KeyBinding(modifiers: null, 
+                                  keys: new KeyBinding.Key[] { new KeyBinding.Key(key, PressMode.Down) },
+                                  holdDelay: 0,
+                                  repeatDelay: 0,
+                                  respectRepeatDelay: false);
+        }
+
+        private static KeyBinding CreateEmptyKeybinding()
+        {
+            return new KeyBinding(holdDelay: 0, repeatDelay: 0, respectRepeatDelay: false);
         }
     }
 }

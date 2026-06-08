@@ -9,9 +9,9 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
     {
         // Voice management commands
 
-        public static AudioSourceCommand AddVoice(Voice voice)
+        public static AudioSourceCommand AddVoice(Voice voice, bool addDefaultOscillatorsIfEmpty = true)
         {
-            return AudioSourceCommand.Create((int)SynthesizerCommandType.AddVoice, objectValue: voice);
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.AddVoice, objectValue: voice, valueStorage: RawValueStorage_64B.From(addDefaultOscillatorsIfEmpty));
         }
 
         public static AudioSourceCommand RemoveVoice(Voice voice)

@@ -5,6 +5,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+using GeoLib;
 using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
@@ -101,7 +102,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         }
 
         private readonly ViewableList<Voice> onVoices = new ViewableList<Voice>(500);
-
         private readonly ViewableList<Voice> offVoices = new ViewableList<Voice>(500);
 
         // This is for use with the RemoveVoice method.
@@ -164,7 +164,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         }
 
         private void AddVoice(Voice voice,
-                              bool on = false)
+                              bool on = false,
+                              bool addDefaultOscillatorsIfEmpty = true)
         {
             if (ContainsVoice(voice))
             {
@@ -189,11 +190,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                 voice.LPF_Adsr.SampleRate = sampleRate;
             }
 
-            if (voice.Oscillators is null || voice.Oscillators.IsEmpty)
+            if ((voice.Oscillators is null || voice.Oscillators.IsEmpty) && addDefaultOscillatorsIfEmpty)
             {
                 if (voice.Oscillators is null)
                 {
-                    voice.Oscillators = new ViewableList<Oscillator>(10);
+                    voice.Oscillators = new ViewableList<Oscillator>(capacity: 10);
                 }
 
                 Oscillator defaultOscillator0 = CreateDefaultOscillator(voice.CenterFrequency);
@@ -230,6 +231,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
             if (offIndex != -1)
             {
+                GeoDebug.Assert(!onVoices.Contains(voice));
+
                 offVoices.RemoveAt(offIndex);
 
                 return true;
@@ -238,7 +241,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             int onIndex = onVoices.IndexOf(voice);
 
             // onIndex should not be -1 by now.
-            Utils.Assert(onIndex != -1);
+            GeoDebug.Assert(onIndex != -1);
 
             if (allowReleaseIfOn)
             {
@@ -323,6 +326,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
                     Voice voice = onVoices.GetUnchecked(index);
 
+                    GeoDebug.Assert(!offVoices.Contains(voice));
+
                     ResetVoice(voice);
 
                     onVoices.RemoveAt(index);
@@ -353,9 +358,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
                     double voiceSample = 0.0;
 
-                    for (int oscillatorIndex = 0; oscillatorIndex < voice.Oscillators.Count; oscillatorIndex++)
+                    if (voice.Oscillators is not null && !voice.Oscillators.IsEmpty)
                     {
-                        voiceSample += voice.Oscillators.GetUnchecked(oscillatorIndex).NextSample(sampleRate, globalVoicePitchShiftRatio);
+                        for (int oscillatorIndex = 0; oscillatorIndex < voice.Oscillators.Count; oscillatorIndex++)
+                        {
+                            voiceSample += voice.Oscillators.GetUnchecked(oscillatorIndex).NextSample(sampleRate, globalVoicePitchShiftRatio);
+                        }
                     }
 
                     if (voice.LPF is not null)
@@ -398,7 +406,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     break;
 
                 case SynthesizerCommandType.AddVoice:
-                    AddVoice((Voice)command.ObjectValue);
+                    AddVoice((Voice)command.ObjectValue, addDefaultOscillatorsIfEmpty: command.ValueStorage.Read<bool>());
                     break;
 
                 case SynthesizerCommandType.RemoveVoice:
@@ -569,6 +577,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         private static void AddVoiceOscillator(Voice voice, Oscillator oscillator)
         {
+            if (voice.Oscillators is null)
+            {
+                voice.Oscillators = new ViewableList<Oscillator>(capacity: 10);
+            }
+
             voice.Oscillators.Add(oscillator);
         }
 
@@ -632,9 +645,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         private static void ResetOscillators(Voice voice)
         {
-            for (int oscillatorIndex = 0; oscillatorIndex < voice.Oscillators.Count; oscillatorIndex++)
+            if (voice is not null && voice.Oscillators is not null && !voice.Oscillators.IsEmpty)
             {
-                voice.Oscillators.GetUnchecked(oscillatorIndex).Reset();
+                for (int oscillatorIndex = 0; oscillatorIndex < voice.Oscillators.Count; oscillatorIndex++)
+                {
+                    voice.Oscillators.GetUnchecked(oscillatorIndex).Reset();
+                }
             }
         }
     }
