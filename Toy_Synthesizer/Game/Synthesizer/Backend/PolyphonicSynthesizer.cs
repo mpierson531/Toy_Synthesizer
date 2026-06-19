@@ -49,7 +49,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         public const double MIN_OSCILLATOR_AMPLITUDE = 0.0;
         public const double MAX_OSCILLATOR_AMPLITUDE = 1.0;
 
-        public const double MIN_OSCILLATOR_DETUNE_CENTS = 0.0;
+        public const double MIN_OSCILLATOR_DETUNE_CENTS = -50.0;
         public const double MAX_OSCILLATOR_DETUNE_CENTS = 50.0;
 
         public const double MIN_MIX = 0.0;
@@ -101,8 +101,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             MixRange = NumberRange<double>.From(MIN_MIX, MAX_MIX);
         }
 
+        private readonly ViewableList<Voice> voicesMasterList = new ViewableList<Voice>(500);
         private readonly ViewableList<Voice> onVoices = new ViewableList<Voice>(500);
         private readonly ViewableList<Voice> offVoices = new ViewableList<Voice>(500);
+        private readonly ViewableList<ViewableList<ParameterizedOscillator>> globalVoiceOscillatorVoiceBindings = new ViewableList<ViewableList<ParameterizedOscillator>>(500);
+
+        private readonly ViewableList<Oscillator> globalVoiceOscillators = new ViewableList<Oscillator>(500);
 
         // This is for use with the RemoveVoice method.
         private readonly ViewableList<int> onVoicesIndicesToRemoveOnNextRead;
@@ -172,6 +176,17 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                 throw new InvalidOperationException("voice already exists.");
             }
 
+            voicesMasterList.Add(voice);
+
+            ViewableList<ParameterizedOscillator> globalVoiceOscillatorBinding = new ViewableList<ParameterizedOscillator>(globalVoiceOscillators.Count);
+
+            globalVoiceOscillatorVoiceBindings.Add(globalVoiceOscillatorBinding);
+
+            for (int globalVoiceOscillatorIndex = 0; globalVoiceOscillatorIndex < globalVoiceOscillators.Count; globalVoiceOscillatorIndex++)
+            {
+                globalVoiceOscillatorBinding.Add(new ParameterizedOscillator());
+            }
+
             if (voice.Adsr is null)
             {
                 voice.Adsr = new AdsrEnvelope(sampleRate);
@@ -206,7 +221,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
             if (on)
             {
-                VoiceOn(voice);
+                VoiceOn(voice, throwIfNonExistent: false);
             }
             else
             {
@@ -220,51 +235,87 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         }
 
         private bool RemoveVoice(Voice voice,
-                                bool allowReleaseIfOn = true)
+                                 bool allowReleaseIfOn = true)
         {
-            if (!ContainsVoice(voice))
+            int voiceMasterIndex = voicesMasterList.IndexOf(voice);
+
+            if (voiceMasterIndex == -1)
             {
+                GeoDebug.Assert(!offVoices.Contains(voice) && !onVoices.Contains(voice));
+
                 return false;
             }
 
             int offIndex = offVoices.IndexOf(voice);
 
-            if (offIndex != -1)
+            if (!allowReleaseIfOn || offIndex != -1)
             {
-                GeoDebug.Assert(!onVoices.Contains(voice));
+                GeoDebug.Assert(onVoices.Contains(voice) || offIndex != -1);
 
-                offVoices.RemoveAt(offIndex);
+                if (offIndex != -1)
+                {
+                    GeoDebug.Assert(!onVoices.Contains(voice));
 
-                return true;
-            }
+                    offVoices.RemoveAt(offIndex);
+                }
+                else
+                {
+                    int onIndex = onVoices.IndexOf(voice);
 
-            int onIndex = onVoices.IndexOf(voice);
+                    GeoDebug.Assert(onIndex != -1);
 
-            // onIndex should not be -1 by now.
-            GeoDebug.Assert(onIndex != -1);
+                    onVoices.RemoveAt(onIndex);
+                }
 
-            if (allowReleaseIfOn)
-            {
-                VoiceOff(voice);
+                ResetVoice(voice);
 
-                onVoicesIndicesToRemoveOnNextRead.Add(onIndex);
+                voicesMasterList.RemoveAt(voiceMasterIndex);
+                globalVoiceOscillatorVoiceBindings.RemoveAt(voiceMasterIndex);
             }
             else
             {
-                ResetVoice(voice);
+                int onIndex = onVoices.IndexOf(voice);
 
-                onVoices.RemoveAt(onIndex);
+                GeoDebug.Assert(onIndex != -1);
+
+                VoiceOff(voice);
+
+                onVoicesIndicesToRemoveOnNextRead.Add(onIndex);
             }
 
             return true;
         }
 
-        // In VoiceOn and VoiceOff, the voice should already be added, ideally. It shouldn't be catastrophic if not though.
+        private void AddGlobalVoiceOscillator(Oscillator oscillator)
+        {
+            GeoDebug.Assert(!globalVoiceOscillators.Contains(oscillator));
+
+            globalVoiceOscillators.Add(oscillator);
+
+            for (int index = 0; index < globalVoiceOscillatorVoiceBindings.Count; index++)
+            {
+                globalVoiceOscillatorVoiceBindings.GetUnchecked(index).Add(new ParameterizedOscillator());
+            }
+        }
+
+        private void RemoveGlobalVoiceOscillator(Oscillator oscillator)
+        {
+            GeoDebug.Assert(globalVoiceOscillators.Contains(oscillator));
+
+            int oscillatorIndex = globalVoiceOscillators.IndexOf(oscillator);
+
+            globalVoiceOscillators.RemoveAt(oscillatorIndex);
+
+            for (int index = 0; index < globalVoiceOscillatorVoiceBindings.Count; index++)
+            {
+                globalVoiceOscillatorVoiceBindings.GetUnchecked(index).RemoveAt(oscillatorIndex);
+            }
+        }
 
         // Begins voice.
-        private void VoiceOn(Voice voice)
+        private void VoiceOn(Voice voice, bool throwIfNonExistent)
         {
-            AddOnVoice(voice, removeFromOff: true);
+            AddOnVoice(voice, removeFromOff: true, throwIfNonExistent: throwIfNonExistent);
 
             voice.Adsr.NoteOn();
             voice.LPF_Adsr.NoteOn();
@@ -277,9 +328,16 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             voice.LPF_Adsr.NoteOff();
         }
 
-        private void AddOnVoice(Voice voice, bool removeFromOff)
+        private void AddOnVoice(Voice voice, bool removeFromOff, bool throwIfNonExistent)
         {
-            if (!onVoices.Contains(voice))
+            bool isAlreadyOn = onVoices.Contains(voice);
+
+            if (throwIfNonExistent && !isAlreadyOn && !offVoices.Contains(voice))
+            {
+                throw new InvalidOperationException("voice was non-existent prior to turning it on.");
+            }
+
+            if (!isAlreadyOn)
             {
                 onVoices.Add(voice);
             }
@@ -294,6 +352,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         private void AddOffVoice(Voice voice, bool removeFromOn)
         {
+            GeoDebug.Assert(!offVoices.Contains(voice));
+
             offVoices.Add(voice);
 
             if (removeFromOn)
@@ -304,19 +364,45 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         public bool ContainsVoice(Voice voice)
         {
-            return offVoices.Contains(voice) || onVoices.Contains(voice);
+#if DEBUG
+            bool masterListContains = voicesMasterList.Contains(voice);
+
+            if (masterListContains)
+            {
+                bool offVoicesContains = offVoices.Contains(voice);
+                bool onVoicesContains = onVoices.Contains(voice);
+
+                GeoDebug.Assert(offVoicesContains || onVoicesContains);
+
+                if (offVoicesContains)
+                {
+                    GeoDebug.Assert(!onVoicesContains);
+                }
+                else if (onVoicesContains)
+                {
+                    GeoDebug.Assert(!offVoicesContains);
+                }
+
+                return true;
+            }
+
+            return false;
+
+#else
+            return voicesMasterList.Contains(voice);
+#endif
         }
 
         int IAudioSource.Read(Span<float> buffer)
         {
             double globalVoicePitchShiftRatio = GlobalVoicePitchShiftRatio;
 
-            SynthesizeVoices(buffer, globalVoicePitchShiftRatio);
+            Synthesize(buffer, globalVoicePitchShiftRatio);
 
             return buffer.Length;
         }
 
-        private void SynthesizeVoices(Span<float> buffer, double globalVoicePitchShiftRatio)
+        private void Synthesize(Span<float> buffer, double globalVoicePitchShiftRatio)
         {
             if (!onVoicesIndicesToRemoveOnNextRead.IsEmpty)
             {
@@ -331,6 +417,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     ResetVoice(voice);
 
                     onVoices.RemoveAt(index);
+
+                    int voiceMasterIndex = voicesMasterList.IndexOf(voice);
+
+                    voicesMasterList.RemoveAt(voiceMasterIndex);
+
+                    globalVoiceOscillatorVoiceBindings.RemoveAt(voiceMasterIndex);
                 }
 
                 onVoicesIndicesToRemoveOnNextRead.Clear();
@@ -363,6 +455,33 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                         for (int oscillatorIndex = 0; oscillatorIndex < voice.Oscillators.Count; oscillatorIndex++)
                         {
                             voiceSample += voice.Oscillators.GetUnchecked(oscillatorIndex).NextSample(sampleRate, globalVoicePitchShiftRatio);
+                        }
+                    }
+
+                    if (!globalVoiceOscillators.IsEmpty)
+                    {
+                        int voiceMasterIndex = voicesMasterList.IndexOf(voice);
+
+                        ViewableList<ParameterizedOscillator> globalVoiceOscillatorsBinding = globalVoiceOscillatorVoiceBindings[voiceMasterIndex];
+
+                        GeoDebug.Assert(!globalVoiceOscillatorsBinding.IsEmpty);
+
+                        GeoDebug.Assert(globalVoiceOscillatorsBinding.Count == globalVoiceOscillators.Count);
+
+                        for (int globalVoiceOscillatorIndex = 0; globalVoiceOscillatorIndex < globalVoiceOscillators.Count; globalVoiceOscillatorIndex++)
+                        {
+                            Oscillator template = globalVoiceOscillators[globalVoiceOscillatorIndex];
+                            ParameterizedOscillator oscillatorPhaseState = globalVoiceOscillatorsBinding[globalVoiceOscillatorIndex];
+
+                            voiceSample += oscillatorPhaseState.NextSample
+                            (
+                                sampleRate: sampleRate,
+                                pitchShiftRatio: globalVoicePitchShiftRatio,
+                                amplitude: template.Amplitude,
+                                waveformType: template.WaveformType,
+                                detuneCents: template.DetuneCents,
+                                centerFrequency: voice.CenterFrequency
+                            );
                         }
                     }
 
@@ -413,8 +532,16 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     RemoveVoice((Voice)command.ObjectValue);
                     break;
 
+                case SynthesizerCommandType.AddGlobalVoiceOscillator:
+                    AddGlobalVoiceOscillator((Oscillator)command.ObjectValue);
+                    break;
+
+                case SynthesizerCommandType.RemoveGlobalVoiceOscillator:
+                    RemoveGlobalVoiceOscillator((Oscillator)command.ObjectValue);
+                    break;
+
                 case SynthesizerCommandType.VoiceOn:
-                    VoiceOn((Voice)command.ObjectValue);
+                    VoiceOn((Voice)command.ObjectValue, throwIfNonExistent: true);
                     break;
 
                 case SynthesizerCommandType.VoiceOff:
@@ -539,7 +666,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             voice.Adsr.ReleaseSeconds = ReleaseRange.Clamp(release);
         }
 
-        private static  void SetVoiceLPFBaseCutoff(Voice voice, double baseCutoff)
+        private static void SetVoiceLPFBaseCutoff(Voice voice, double baseCutoff)
         {
             voice.LPF_BaseCutoff = LPF_BaseCutoffRange.Clamp(baseCutoff);
         }
@@ -622,7 +749,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             return new InvalidOperationException($"Invalid command ID: \"{commandID}\".");
         }
 
-        private static void ResetVoice(Voice voice)
+        private void ResetVoice(Voice voice)
         {
             voice.IsOff = true;
 
@@ -631,19 +758,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             ResetOscillators(voice);
         }
 
-        public static Oscillator CreateDefaultOscillator(double centerFrequency)
-        {
-            return new Oscillator
-            {
-                CenterFrequency = centerFrequency,
-                Phase = 0,
-                Amplitude = DEFAULT_AMPLITUDE,
-                WaveformType = DEFAULT_WAVEFORM_TYPE,
-                DetuneCents = 0
-            };
-        }
-
-        private static void ResetOscillators(Voice voice)
+        private void ResetOscillators(Voice voice)
         {
             if (voice is not null && voice.Oscillators is not null && !voice.Oscillators.IsEmpty)
             {
@@ -652,6 +767,29 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     voice.Oscillators.GetUnchecked(oscillatorIndex).Reset();
                 }
             }
+
+            if (voice is not null && !globalVoiceOscillators.IsEmpty)
+            {
+                ViewableList<ParameterizedOscillator> globalVoiceOscillatorsBinding = globalVoiceOscillatorVoiceBindings[voicesMasterList.IndexOf(voice)];
+
+                GeoDebug.Assert(!globalVoiceOscillatorsBinding.IsEmpty);
+
+                for (int globalVoiceOscillatorBindingIndex = 0; globalVoiceOscillatorBindingIndex < globalVoiceOscillatorsBinding.Count; globalVoiceOscillatorBindingIndex++)
+                {
+                    globalVoiceOscillatorsBinding[globalVoiceOscillatorBindingIndex].Reset();
+                }
+            }
+        }
+
+        public static Oscillator CreateDefaultOscillator(double centerFrequency)
+        {
+            return new Oscillator
+            {
+                CenterFrequency = centerFrequency,
+                Amplitude = DEFAULT_AMPLITUDE,
+                WaveformType = DEFAULT_WAVEFORM_TYPE,
+                DetuneCents = 0
+            };
         }
     }
 }

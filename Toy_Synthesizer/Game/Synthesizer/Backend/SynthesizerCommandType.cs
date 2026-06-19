@@ -13,6 +13,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         AddVoice,
         RemoveVoice,
+
+        AddGlobalVoiceOscillator,
+        RemoveGlobalVoiceOscillator,
+
         VoiceOn,
         VoiceOff,
 

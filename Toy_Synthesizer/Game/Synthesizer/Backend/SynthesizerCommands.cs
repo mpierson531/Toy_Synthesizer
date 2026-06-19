@@ -19,6 +19,16 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             return AudioSourceCommand.Create((int)SynthesizerCommandType.RemoveVoice, objectValue: voice);
         }
 
+        public static AudioSourceCommand AddGlobalWaveformOscillator(Oscillator oscillator)
+        {
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.AddGlobalVoiceOscillator, objectValue: oscillator);
+        }
+
+        public static AudioSourceCommand RemoveGlobalWaveformOscillator(Oscillator oscillator)
+        {
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.RemoveGlobalVoiceOscillator, objectValue: oscillator);
+        }
+
         public static AudioSourceCommand VoiceOn(Voice voice)
         {
             return AudioSourceCommand.Create((int)SynthesizerCommandType.VoiceOn, objectValue: voice);
