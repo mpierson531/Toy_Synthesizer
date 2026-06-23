@@ -9,10 +9,12 @@ using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
+using Toy_Synthesizer.Game.DigitalSignalProcessing.Filters;
 using Toy_Synthesizer.Game.Midi;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Backend
 {
+    // NOTE: This class will not validate or clamp values
     public class Voice : ICopyable
     {
         public static Voice FromMidi(MidiNote note, 
@@ -74,15 +76,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             }
         }
 
-        private double mix;
+        public string Name = null;
 
-        public string Name;
-
-        public double Mix
-        {
-            get => mix;
-            set => mix = PolyphonicSynthesizer.MixRange.Clamp(value);
-        }
+        public double Mix = PolyphonicSynthesizer.DEFAULT_MIX;
 
         public AdsrEnvelope Adsr;
         public StateVariableLPF LPF;

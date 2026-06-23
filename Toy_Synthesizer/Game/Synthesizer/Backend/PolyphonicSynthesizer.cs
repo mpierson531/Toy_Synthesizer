@@ -10,7 +10,10 @@ using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
+using SharpDX.XAudio2;
+
 using Toy_Synthesizer.Game.DigitalSignalProcessing;
+using Toy_Synthesizer.Game.DigitalSignalProcessing.Filters;
 using Toy_Synthesizer.Game.Synthesizer.Frontend.Console;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Backend
@@ -18,14 +21,16 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
     // TODO: Look into Voice/StateVariableLPF default cutoffs more.
     public class PolyphonicSynthesizer : IAudioSource, IAudioSourceCommandReceiver
     {
-        public const double DEFAULT_AMPLITUDE = 0.5;
-        public const WaveformType DEFAULT_WAVEFORM_TYPE = WaveformType.Square;
+        public const double DEFAULT_OSCILLATOR_AMPLITUDE = 0.75;
+        public const WaveformType DEFAULT_OSCILLATOR_WAVEFORM_TYPE = WaveformType.Sine;
 
         public const double MIN_CENTER_FREQUENCY = 0.0;
         public const double MAX_CENTER_FREQUENCY = 32000.0;
 
-        public const double DEFAULT_LPFBASE_CUTOFF = 800.0;
+        public const double DEFAULT_LPFBASE_CUTOFF = 2000;
         public const double DEFAULT_LPF_ADSR_AMOUNT = 3000.0;
+        public const double DEFAULT_LPF_RESONANCE = 0.25;
+
         public const double DEFAULT_MIX = 1.0;
 
         public const double MIN_ATTACK = 0.0;
@@ -42,6 +47,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         public const double MIN_LPF_BASE_CUTOFF = 0.0;
         public const double MAX_LPF_BASE_CUTOFF = 32000.0;
+
+        public const double MIN_LPF_ADSR_AMOUNT = 0.0;
+        public const double MAX_LPF_ADSR_AMOUNT = 20000.0;
 
         public const double MIN_LPF_RESONANCE = 0.0;
         public const double MAX_LPF_RESONANCE = 1.0;
@@ -63,6 +71,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         public static readonly NumberRange<double> ReleaseRange;
 
         public static readonly NumberRange<double> LPF_BaseCutoffRange;
+        public static readonly NumberRange<double> LPF_AdsrAmountRange;
         public static readonly NumberRange<double> LPF_ResonanceRange;
 
         public static readonly NumberRange<double> OscillatorAmplitudeRange;
@@ -81,6 +90,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             ReleaseRange = NumberRange<double>.From(MIN_RELEASE, MAX_RELEASE);
 
             LPF_BaseCutoffRange = NumberRange<double>.From(MIN_LPF_BASE_CUTOFF, MAX_LPF_BASE_CUTOFF);
+            LPF_AdsrAmountRange = NumberRange<double>.From(MIN_LPF_ADSR_AMOUNT, MAX_LPF_ADSR_AMOUNT);
             LPF_ResonanceRange = NumberRange<double>.From(MIN_LPF_RESONANCE, MAX_LPF_RESONANCE);
 
             OscillatorAmplitudeRange = NumberRange<double>.From(MIN_OSCILLATOR_AMPLITUDE, MAX_OSCILLATOR_AMPLITUDE);
@@ -176,6 +186,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                 throw new InvalidOperationException("voice already exists.");
             }
 
+            ValidateVoice(voice);
+
             voicesMasterList.Add(voice);
 
             ViewableList<ParameterizedOscillator> globalVoiceOscillatorBinding = new ViewableList<ParameterizedOscillator>(globalVoiceOscillators.Count);
@@ -212,8 +224,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     voice.Oscillators = new ViewableList<Oscillator>(capacity: 10);
                 }
 
-                Oscillator defaultOscillator0 = CreateDefaultOscillator(voice.CenterFrequency);
-                Oscillator defaultOscillator1 = CreateDefaultOscillator(voice.CenterFrequency);
+                Oscillator defaultOscillator0 = CreateDefaultOscillator(voice.CenterFrequency, amplitude: DEFAULT_OSCILLATOR_AMPLITUDE, waveformType: WaveformType.Square);
+                Oscillator defaultOscillator1 = CreateDefaultOscillator(voice.CenterFrequency, amplitude: DEFAULT_OSCILLATOR_AMPLITUDE, waveformType: WaveformType.Sine);
 
                 voice.Oscillators.Add(defaultOscillator0);
                 voice.Oscillators.Add(defaultOscillator1);
@@ -289,6 +301,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         private void AddGlobalVoiceOscillator(Oscillator oscillator)
         {
             GeoDebug.Assert(!globalVoiceOscillators.Contains(oscillator));
+
+            ValidateOscillator(oscillator, oscillator.CenterFrequency);
 
             globalVoiceOscillators.Add(oscillator);
 
@@ -631,6 +645,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             }
         }
 
+        public StateVariableLPF CreateDefaultLPF()
+        {
+            return CreateDefaultLPF(SampleRate);
+        }
+
         private static void SetVoiceCenterFrequency(Voice voice,  double frequency)
         {
             voice.CenterFrequency = CenterFrequencyRange.Clamp(frequency);
@@ -699,7 +718,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         // TODO: Implement range.
         private static void SetVoiceLPFAdsrAmount(Voice voice, double amount)
         {
-            voice.LPF_AdsrAmount = amount;
+            voice.LPF_AdsrAmount = LPF_AdsrAmountRange.Clamp(amount);
         }
 
         private static void AddVoiceOscillator(Voice voice, Oscillator oscillator)
@@ -708,6 +727,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             {
                 voice.Oscillators = new ViewableList<Oscillator>(capacity: 10);
             }
+
+            ValidateOscillator(oscillator, voice.CenterFrequency);
 
             voice.Oscillators.Add(oscillator);
         }
@@ -729,9 +750,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         {
             if (!SupportedOscillatorWaveformTypes.Contains(waveformType))
             {
-                // Not sure if it should return or throw an exception.
+                waveformType = DEFAULT_OSCILLATOR_WAVEFORM_TYPE;
 
-                return;
+                // Not sure if it should throw an exception.
 
                 //throw new InvalidOperationException($"WaveformType for oscillators \"{waveformType}\" not supported.");
             }
@@ -754,6 +775,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             voice.IsOff = true;
 
             voice.Adsr.Reset();
+            voice.LPF_Adsr?.Reset();
+            voice.LPF?.Reset();
 
             ResetOscillators(voice);
         }
@@ -781,15 +804,104 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             }
         }
 
-        public static Oscillator CreateDefaultOscillator(double centerFrequency)
+        // This validates everything in a voice and ensures everything is in a valid range.
+        // This will also validate oscillators and set the voice's oscillators' center frequency.
+        public static void ValidateVoice(Voice voice)
+        {
+            if (voice is null)
+            {
+                return;
+            }
+
+            SetVoiceMix(voice, voice.Mix);
+
+            SetVoiceCenterFrequency(voice, voice.CenterFrequency);
+
+            ValidateAdsrEnvelope(voice.Adsr);
+
+            ValidateVoiceLPF(voice);
+
+            ValidateOscillators(voice.Oscillators, voice.CenterFrequency);
+        }
+
+        public static void ValidateAdsrEnvelope(AdsrEnvelope adsr)
+        {
+            if (adsr is null)
+            {
+                return;
+            }
+
+            adsr.AttackSeconds = AttackRange.Clamp(adsr.AttackSeconds);
+            adsr.DecaySeconds = AttackRange.Clamp(adsr.DecaySeconds);
+            adsr.SustainLevel = SustainRange.Clamp(adsr.SustainLevel);
+            adsr.ReleaseSeconds = ReleaseRange.Clamp(adsr.ReleaseSeconds);
+        }
+
+        // Validates Voice.LPF_BaseCutoff, Voice.LPF.Resonance, Voice.LPF_Adsr, and Voice.LPF_AdsrAmount.
+        public static void ValidateVoiceLPF(Voice voice)
+        {
+            if (voice is null)
+            {
+                return;
+            }
+
+            voice.LPF_BaseCutoff = LPF_BaseCutoffRange.Clamp(voice.LPF_BaseCutoff);
+
+            if (voice.LPF is not null)
+            {
+                voice.LPF.Resonance = LPF_ResonanceRange.Clamp(voice.LPF.Resonance);
+            }
+
+            ValidateAdsrEnvelope(voice.LPF_Adsr);
+
+            voice.LPF_AdsrAmount = LPF_AdsrAmountRange.Clamp(voice.LPF_AdsrAmount);
+        }
+
+        // Also sets the center frequency.
+        public static void ValidateOscillators(ViewableList<Oscillator> oscillators, double centerFrequency)
+        {
+            if (oscillators is null)
+            {
+                return;
+            }
+
+            for (int index = 0; index < oscillators.Count; index++)
+            {
+                ValidateOscillator(oscillators[index], centerFrequency);
+            }
+        }
+
+        // Also sets the center frequency.
+        public static void ValidateOscillator(Oscillator oscillator, double centerFrequency)
+        {
+            oscillator.CenterFrequency = CenterFrequencyRange.Clamp(centerFrequency);
+
+            oscillator.Amplitude = OscillatorAmplitudeRange.Clamp(oscillator.Amplitude);
+
+            if (!SupportedOscillatorWaveformTypes.Contains(oscillator.WaveformType))
+            {
+                oscillator.WaveformType = DEFAULT_OSCILLATOR_WAVEFORM_TYPE;
+            }
+
+            oscillator.DetuneCents = OscillatorDetuneCentsRange.Clamp(oscillator.DetuneCents);
+        }
+
+        public static Oscillator CreateDefaultOscillator(double centerFrequency, 
+                                                         double amplitude = DEFAULT_OSCILLATOR_AMPLITUDE,
+                                                         WaveformType waveformType = DEFAULT_OSCILLATOR_WAVEFORM_TYPE)
         {
             return new Oscillator
             {
                 CenterFrequency = centerFrequency,
-                Amplitude = DEFAULT_AMPLITUDE,
-                WaveformType = DEFAULT_WAVEFORM_TYPE,
+                Amplitude = amplitude,
+                WaveformType = waveformType,
                 DetuneCents = 0
             };
+        }
+
+        public static StateVariableLPF CreateDefaultLPF(int sampleRate)
+        {
+            return new StateVariableLPF(cutoff: DEFAULT_LPFBASE_CUTOFF, resonance: DEFAULT_LPF_RESONANCE, sampleRate: sampleRate);
         }
     }
 }

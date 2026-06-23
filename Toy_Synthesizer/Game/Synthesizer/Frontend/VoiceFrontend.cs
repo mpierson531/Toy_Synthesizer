@@ -17,6 +17,7 @@ using GeoLib.GeoUtils.Collections;
 using Microsoft.Xna.Framework.Input;
 
 using Toy_Synthesizer.Game.DigitalSignalProcessing;
+using Toy_Synthesizer.Game.DigitalSignalProcessing.Filters;
 using Toy_Synthesizer.Game.Midi;
 using Toy_Synthesizer.Game.Synthesizer.Backend;
 using Toy_Synthesizer.Game.Synthesizer.Frontend.Console;
@@ -31,14 +32,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         public const double DEFAULT_SHIFT_SEMITONE_AMOUNT = 12.0;
         public const double DEFAULT_CONTROL_SEMITONE_AMOUNT = -12.0;
         public static readonly NumberRange<double> ShiftAndControlSemitoneRange;
-        private static readonly Dictionary<Voice, KeyBinding> defaultKeyVoiceBindings;
         public static readonly ImmutableArray<Keys> InvalidVoiceKeybindingKeys;
 
         static VoiceFrontend()
         {
             ShiftAndControlSemitoneRange = NumberRange<double>.From(-24.0, 24.0);
-
-            defaultKeyVoiceBindings = GetDefaultKeyVoiceBindings();
 
             InvalidVoiceKeybindingKeys = new ImmutableArray<Keys>(new Keys[]
             {
@@ -67,6 +65,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
         private double? currentShiftShiftedSemitoneAmount;
         private double? currentControlShiftedSemitoneAmount;
+
+        private readonly Dictionary<Voice, KeyBinding> defaultKeyVoiceBindings;
 
         private readonly Dictionary<Voice, KeyBinding> voiceKeybindings;
         private readonly Dictionary<Voice, bool> voiceKeybindingsInputHandled;
@@ -137,6 +137,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
             ShiftSemitoneAmount = DEFAULT_SHIFT_SEMITONE_AMOUNT;
             ControlSemitoneAmount = DEFAULT_CONTROL_SEMITONE_AMOUNT;
 
+            defaultKeyVoiceBindings = GetDefaultKeyVoiceBindings(game.Synthesizer);
+
             voiceKeybindings = new Dictionary<Voice, KeyBinding>(defaultKeyVoiceBindings.Count);
             voiceKeybindingsInputHandled = new Dictionary<Voice, bool>();
 
@@ -151,8 +153,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
             foreach (Voice voice in voiceKeybindings.Keys)
             {
-                voice.LPF = new StateVariableLPF(20000, 0.25, game.Synthesizer.SampleRate);
-
                 AudioSourceCommand addVoiceCommand = SynthesizerCommands.AddVoice(voice);
 
                 game.Synthesizer.SendCommand(ref addVoiceCommand);
@@ -615,7 +615,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
         private const string VoiceUtilitiesDropDownName = "VoiceUtiltiesDropDown";
         private const string AddVoiceButtonName = "AddVoiceButton";
 
-        private static Dictionary<Voice, KeyBinding> GetDefaultKeyVoiceBindings()
+        private static Dictionary<Voice, KeyBinding> GetDefaultKeyVoiceBindings(PolyphonicSynthesizer synthesizer)
         {
             MidiNote startNote = MidiNote.C4;
 
@@ -649,7 +649,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
                     MidiNote midiNote = (MidiNote)noteValue;
 
-                    Voice voice = Voice.FromMidi(midiNote);
+                    StateVariableLPF lpf = synthesizer.CreateDefaultLPF();
+
+                    Voice voice = Voice.FromMidi(midiNote, stateVariableLPF: lpf);
 
                     voices.Add((voice, keybinding));
                 }

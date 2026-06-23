@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 using GeoLib;
 
-namespace Toy_Synthesizer.Game.Synthesizer.Backend
+namespace Toy_Synthesizer.Game.DigitalSignalProcessing.Filters
 {
     // TODO: implement commands.
     public class StateVariableLPF : ICopyable
@@ -16,8 +16,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         private double low;
         private double band;
 
-        private double f;
-        private double q;
+        private double cutoffCoefficient;
+        private double resonanceDamping;
 
         public double Cutoff;
         public double Resonance;
@@ -36,22 +36,25 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         {
             this.sampleRate = sampleRate;
 
-            cutoff = Math.Clamp(cutoff, 20.0, sampleRate * 0.45);
+            cutoff = Math.Clamp(cutoff, 20.0, sampleRate * 0.25);
 
             Cutoff = cutoff;
-            Resonance = PolyphonicSynthesizer.LPF_ResonanceRange.Clamp(resonance);
+            Resonance = resonance;
 
-            f = 2.0 * Math.Sin(Math.PI * cutoff / sampleRate);
+            cutoffCoefficient = 2.0 * Math.Sin(Math.PI * cutoff / sampleRate);
 
-            q = 2.0 * (1.0 - Resonance);
+            resonanceDamping = Math.Max(0.05, 1.0 - Resonance);
         }
 
         public double Process(double input)
         {
-            double high = input - low - q * band;
+            low += cutoffCoefficient * band;
 
-            band += f * high;
-            low += f * band;
+            double high = input - low - resonanceDamping * band;
+
+            band += cutoffCoefficient * high;
+
+            GeoDebug.BreakIf(double.IsNaN(low) || double.IsInfinity(low) || double.IsNaN(band) || double.IsInfinity(band));
 
             return low;
         }
