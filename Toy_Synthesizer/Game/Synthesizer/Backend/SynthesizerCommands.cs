@@ -1,10 +1,14 @@
 ﻿using System;
 
-using Toy_Synthesizer.Game.CommonUtils.RawValueStorage;
-using Toy_Synthesizer.Game.Synthesizer.Backend;
+using GeoLib.GeoUtils;
 
-namespace Toy_Synthesizer.Game.DigitalSignalProcessing
+using Toy_Synthesizer.Game.CommonUtils.RawValueStorage;
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
+using Toy_Synthesizer.Game.DigitalSignalProcessing.Filters;
+
+namespace Toy_Synthesizer.Game.Synthesizer.Backend
 {
+    // TODO: Implement commands for setting voice filter mix parameters
     public static class SynthesizerCommands
     {
         // Voice management commands
@@ -87,41 +91,66 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
             return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Release, valueStorage: RawValueStorage_64B.From(release), objectValue: voice);
         }
 
-        // Voice LPF commands
+        // Voice Filter commands
 
-        public static AudioSourceCommand SetVoiceLPFBaseCutoff(Voice voice, double cutoff)
+        public static AudioSourceCommand SetVoiceFilterBaseCutoff(Voice voice, double cutoff)
         {
-            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_LPFBaseCutoff, valueStorage: RawValueStorage_64B.From(cutoff), objectValue: voice);
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_BaseCutoff, valueStorage: RawValueStorage_64B.From(cutoff), objectValue: voice);
         }
 
-        public static AudioSourceCommand SetVoiceLPFResonance(Voice voice, double resonance)
+        public static AudioSourceCommand SetVoiceFilterResonance(Voice voice, double resonance)
         {
-            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_LPF_Resonance, valueStorage: RawValueStorage_64B.From(resonance), objectValue: voice);
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_Resonance, valueStorage: RawValueStorage_64B.From(resonance), objectValue: voice);
         }
 
-        public static AudioSourceCommand SetVoiceLPFAttack(Voice voice, double attack)
+        public static AudioSourceCommand SetVoiceFilterGain(Voice voice, double gain)
         {
-            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_LPF_Attack, valueStorage: RawValueStorage_64B.From(attack), objectValue: voice);
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_Gain, valueStorage: RawValueStorage_64B.From(gain), objectValue: voice);
         }
 
-        public static AudioSourceCommand SetVoiceLPFDecay(Voice voice, double decay)
+        public static AudioSourceCommand SetVoiceFilterMix(Voice voice, UnmanagedNullable<SVFMix> mix)
         {
-            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_LPF_Decay, valueStorage: RawValueStorage_64B.From(decay), objectValue: voice);
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_Mix, valueStorage: RawValueStorage_64B.From(mix), objectValue: voice);
         }
 
-        public static AudioSourceCommand SetVoiceLPFSustain(Voice voice, double sustain)
+        public static AudioSourceCommand SetVoiceFilterMixLow(Voice voice, double low)
         {
-            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_LPF_Sustain, valueStorage: RawValueStorage_64B.From(sustain), objectValue: voice);
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_Mix_Low, valueStorage: RawValueStorage_64B.From(low), objectValue: voice);
         }
 
-        public static AudioSourceCommand SetVoiceLPFRelease(Voice voice, double release)
+        public static AudioSourceCommand SetVoiceFilterMixHigh(Voice voice, double high)
         {
-            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_LPF_Release, valueStorage: RawValueStorage_64B.From(release), objectValue: voice);
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_Mix_High, valueStorage: RawValueStorage_64B.From(high), objectValue: voice);
         }
 
-        public static AudioSourceCommand SetVoiceLPFAdsrAmount(Voice voice, double amount)
+        public static AudioSourceCommand SetVoiceFilterMixBand(Voice voice, double band)
         {
-            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_LPF_ADSR_Amount, valueStorage: RawValueStorage_64B.From(amount), objectValue: voice);
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_Mix_Band, valueStorage: RawValueStorage_64B.From(band), objectValue: voice);
+        }
+
+        public static AudioSourceCommand SetVoiceFilterAttack(Voice voice, double attack)
+        {
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_Attack, valueStorage: RawValueStorage_64B.From(attack), objectValue: voice);
+        }
+
+        public static AudioSourceCommand SetVoiceFilterDecay(Voice voice, double decay)
+        {
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_Decay, valueStorage: RawValueStorage_64B.From(decay), objectValue: voice);
+        }
+
+        public static AudioSourceCommand SetVoiceFilterSustain(Voice voice, double sustain)
+        {
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_Sustain, valueStorage: RawValueStorage_64B.From(sustain), objectValue: voice);
+        }
+
+        public static AudioSourceCommand SetVoiceFilterRelease(Voice voice, double release)
+        {
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_Release, valueStorage: RawValueStorage_64B.From(release), objectValue: voice);
+        }
+
+        public static AudioSourceCommand SetVoiceFilterAdsrAmount(Voice voice, double amount)
+        {
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_ADSR_Amount, valueStorage: RawValueStorage_64B.From(amount), objectValue: voice);
         }
 
         // Voice oscillator management commands

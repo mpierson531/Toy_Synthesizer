@@ -33,15 +33,20 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         SetVoice_Sustain,
         SetVoice_Release,
 
-        SetVoice_LPFBaseCutoff,
-        SetVoice_LPF_Resonance,
+        SetVoice_Filter_BaseCutoff,
+        SetVoice_Filter_Resonance,
+        SetVoice_Filter_Gain,
+        SetVoice_Filter_Mix,
+        SetVoice_Filter_Mix_Low,
+        SetVoice_Filter_Mix_High,
+        SetVoice_Filter_Mix_Band,
 
-        SetVoice_LPF_Attack,
-        SetVoice_LPF_Decay,
-        SetVoice_LPF_Sustain,
-        SetVoice_LPF_Release,
+        SetVoice_Filter_Attack,
+        SetVoice_Filter_Decay,
+        SetVoice_Filter_Sustain,
+        SetVoice_Filter_Release,
 
-        SetVoice_LPF_ADSR_Amount,
+        SetVoice_Filter_ADSR_Amount,
 
         Voice_AddOscillator,
         Voice_RemoveOscillator,

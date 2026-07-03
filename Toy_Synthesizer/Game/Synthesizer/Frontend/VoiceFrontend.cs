@@ -649,9 +649,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
                     MidiNote midiNote = (MidiNote)noteValue;
 
-                    StateVariableLPF lpf = synthesizer.CreateDefaultLPF();
+                    SVF filter = synthesizer.CreateDefaultLPF();
+                    SVFMix filterMix = SVFMix.LowPass();
 
-                    Voice voice = Voice.FromMidi(midiNote, stateVariableLPF: lpf);
+                    Voice voice = Voice.FromMidi(midiNote, filter: filter, filterMix: filterMix);
 
                     voices.Add((voice, keybinding));
                 }

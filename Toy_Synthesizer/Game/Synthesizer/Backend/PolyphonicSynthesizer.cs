@@ -10,15 +10,12 @@ using GeoLib.GeoMaths;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
-using SharpDX.XAudio2;
-
 using Toy_Synthesizer.Game.DigitalSignalProcessing;
 using Toy_Synthesizer.Game.DigitalSignalProcessing.Filters;
 using Toy_Synthesizer.Game.Synthesizer.Frontend.Console;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Backend
 {
-    // TODO: Look into Voice/StateVariableLPF default cutoffs more.
     public class PolyphonicSynthesizer : IAudioSource, IAudioSourceCommandReceiver
     {
         public const double DEFAULT_OSCILLATOR_AMPLITUDE = 0.75;
@@ -27,9 +24,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         public const double MIN_CENTER_FREQUENCY = 0.0;
         public const double MAX_CENTER_FREQUENCY = 32000.0;
 
-        public const double DEFAULT_LPFBASE_CUTOFF = 2000;
-        public const double DEFAULT_LPF_ADSR_AMOUNT = 3000.0;
-        public const double DEFAULT_LPF_RESONANCE = 0.25;
+        public const double DEFAULT_FILTER_BASE_CUTOFF = 2000;
+        public const double DEFAULT_FILTER_ADSR_AMOUNT = 3000.0;
+        public const double DEFAULT_FILTER_RESONANCE = 0.25;
+        public const double DEFAULT_FILTER_GAIN = 1.0;
 
         public const double DEFAULT_MIX = 1.0;
 
@@ -45,14 +43,20 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         public const double MIN_RELEASE = 0.0;
         public const double MAX_RELEASE = 3600.0;
 
-        public const double MIN_LPF_BASE_CUTOFF = 0.0;
-        public const double MAX_LPF_BASE_CUTOFF = 32000.0;
+        public const double MIN_FILTER_BASE_CUTOFF = 0.0;
+        public const double MAX_FILTER_BASE_CUTOFF = 32000.0;
 
-        public const double MIN_LPF_ADSR_AMOUNT = 0.0;
-        public const double MAX_LPF_ADSR_AMOUNT = 20000.0;
+        public const double MIN_FILTER_ADSR_AMOUNT = 0.0;
+        public const double MAX_FILTER_ADSR_AMOUNT = 20000.0;
 
-        public const double MIN_LPF_RESONANCE = 0.0;
-        public const double MAX_LPF_RESONANCE = 1.0;
+        public const double MIN_FILTER_RESONANCE = 0.0;
+        public const double MAX_FILTER_RESONANCE = 1.0;
+
+        public const double MIN_FILTER_GAIN = 0.0;
+        public const double MAX_FILTER_GAIN = 10.0;
+
+        public const double MIN_FILTER_MIX = 0.0;
+        public const double MAX_FILTER_MIX = 1.0;
 
         public const double MIN_OSCILLATOR_AMPLITUDE = 0.0;
         public const double MAX_OSCILLATOR_AMPLITUDE = 1.0;
@@ -70,9 +74,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         public static readonly NumberRange<double> SustainRange;
         public static readonly NumberRange<double> ReleaseRange;
 
-        public static readonly NumberRange<double> LPF_BaseCutoffRange;
-        public static readonly NumberRange<double> LPF_AdsrAmountRange;
-        public static readonly NumberRange<double> LPF_ResonanceRange;
+        public static readonly NumberRange<double> Filter_BaseCutoffRange;
+        public static readonly NumberRange<double> Filter_AdsrAmountRange;
+        public static readonly NumberRange<double> Filter_ResonanceRange;
+        public static readonly NumberRange<double> Filter_GainRange;
+        public static readonly NumberRange<double> Filter_MixRange;
 
         public static readonly NumberRange<double> OscillatorAmplitudeRange;
         public static readonly ImmutableArray<WaveformType> SupportedOscillatorWaveformTypes;
@@ -89,9 +95,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             SustainRange = NumberRange<double>.From(MIN_SUSTAIN, MAX_SUSTAIN);
             ReleaseRange = NumberRange<double>.From(MIN_RELEASE, MAX_RELEASE);
 
-            LPF_BaseCutoffRange = NumberRange<double>.From(MIN_LPF_BASE_CUTOFF, MAX_LPF_BASE_CUTOFF);
-            LPF_AdsrAmountRange = NumberRange<double>.From(MIN_LPF_ADSR_AMOUNT, MAX_LPF_ADSR_AMOUNT);
-            LPF_ResonanceRange = NumberRange<double>.From(MIN_LPF_RESONANCE, MAX_LPF_RESONANCE);
+            Filter_BaseCutoffRange = NumberRange<double>.From(MIN_FILTER_BASE_CUTOFF, MAX_FILTER_BASE_CUTOFF);
+            Filter_AdsrAmountRange = NumberRange<double>.From(MIN_FILTER_ADSR_AMOUNT, MAX_FILTER_ADSR_AMOUNT);
+            Filter_ResonanceRange = NumberRange<double>.From(MIN_FILTER_RESONANCE, MAX_FILTER_RESONANCE);
+            Filter_GainRange = NumberRange<double>.From(MIN_FILTER_GAIN, MAX_FILTER_GAIN);
+            Filter_MixRange = NumberRange<double>.From(MIN_FILTER_MIX, MAX_FILTER_MIX);
 
             OscillatorAmplitudeRange = NumberRange<double>.From(MIN_OSCILLATOR_AMPLITUDE, MAX_OSCILLATOR_AMPLITUDE);
 
@@ -208,13 +216,13 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                 voice.Adsr.SampleRate = sampleRate;
             }
 
-            if (voice.LPF_Adsr is null)
+            if (voice.Filter_Adsr is null)
             {
-                voice.LPF_Adsr = voice.Adsr.Copy(deepCopy: true);
+                voice.Filter_Adsr = voice.Adsr.Copy(deepCopy: true);
             }
             else
             {
-                voice.LPF_Adsr.SampleRate = sampleRate;
+                voice.Filter_Adsr.SampleRate = sampleRate;
             }
 
             if ((voice.Oscillators is null || voice.Oscillators.IsEmpty) && addDefaultOscillatorsIfEmpty)
@@ -332,14 +340,14 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             AddOnVoice(voice, removeFromOff: true, throwIfNonExistent: throwIfNonExistent);
 
             voice.Adsr.NoteOn();
-            voice.LPF_Adsr.NoteOn();
+            voice.Filter_Adsr.NoteOn();
         }
 
         // Initiates the ending of voice.
         private void VoiceOff(Voice voice)
         {
             voice.Adsr.NoteOff();
-            voice.LPF_Adsr.NoteOff();
+            voice.Filter_Adsr.NoteOff();
         }
 
         private void AddOnVoice(Voice voice, bool removeFromOff, bool throwIfNonExistent)
@@ -451,7 +459,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     Voice voice = onVoices.GetUnchecked(voiceIndex);
 
                     double ampAdsrResult = voice.Adsr.NextSample();
-                    double filterAdsrResult = voice.LPF_Adsr.NextSample();
+                    double filterAdsrResult = voice.Filter_Adsr.NextSample();
 
                     if (voice.Adsr.IsFinished)
                     {
@@ -499,13 +507,19 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                         }
                     }
 
-                    if (voice.LPF is not null)
+                    if (voice.Filter is not null)
                     {
-                        double cutoff = voice.LPF_BaseCutoff + filterAdsrResult * voice.LPF_AdsrAmount;
+                        double cutoff = voice.Filter_BaseCutoff + filterAdsrResult * voice.Filter_AdsrAmount;
 
-                        voice.LPF.Set(cutoff, voice.LPF.Resonance, sampleRate);
+                        cutoff = GeoMath.Clamp(cutoff, 0.0, 44100.0);
 
-                        voiceSample = voice.LPF.Process(voiceSample);
+                        voice.Filter.Set(cutoff, voice.Filter.Resonance, voice.Filter.Gain, sampleRate);
+
+                        SVFOutput filterOutput = voice.Filter.Process(voiceSample);
+
+                        double filterMix = filterOutput.Mix(voice.FilterMix.GetValueOrDefault(SVFMix.Default));
+
+                        voiceSample = filterMix;
                     }
 
                     voiceSample *= voice.Mix;
@@ -591,29 +605,49 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     SetVoiceRelease((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
                     break;
 
-                case SynthesizerCommandType.SetVoice_LPFBaseCutoff:
-                    SetVoiceLPFBaseCutoff((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                case SynthesizerCommandType.SetVoice_Filter_BaseCutoff:
+                    SetVoiceFilterBaseCutoff((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
                     break;
 
-                case SynthesizerCommandType.SetVoice_LPF_Resonance:
-                    SetVoiceLPFResonance((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                case SynthesizerCommandType.SetVoice_Filter_Resonance:
+                    SetVoiceFilterResonance((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
                     break;
 
-                case SynthesizerCommandType.SetVoice_LPF_Attack:
-                    SetVoiceLPFAttack((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
-                    break;
-                case SynthesizerCommandType.SetVoice_LPF_Decay:
-                    SetVoiceLPFDecay((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
-                    break;
-                case SynthesizerCommandType.SetVoice_LPF_Sustain:
-                    SetVoiceLPFSustain((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
-                    break;
-                case SynthesizerCommandType.SetVoice_LPF_Release:
-                    SetVoiceLPFRelease((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                case SynthesizerCommandType.SetVoice_Filter_Gain:
+                    SetVoiceFilterGain((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
                     break;
 
-                case SynthesizerCommandType.SetVoice_LPF_ADSR_Amount:
-                    SetVoiceLPFAdsrAmount((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                case SynthesizerCommandType.SetVoice_Filter_Mix:
+                    SetVoiceFilterMix((Voice)command.ObjectValue, command.ValueStorage.Read<UnmanagedNullable<SVFMix>>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_Filter_Mix_Low:
+                    SetVoiceFilterMixLow((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_Filter_Mix_High:
+                    SetVoiceFilterMixHigh((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_Filter_Mix_Band:
+                    SetVoiceFilterMixBand((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_Filter_Attack:
+                    SetVoiceFilterAttack((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+                case SynthesizerCommandType.SetVoice_Filter_Decay:
+                    SetVoiceFilterDecay((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+                case SynthesizerCommandType.SetVoice_Filter_Sustain:
+                    SetVoiceFilterSustain((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+                case SynthesizerCommandType.SetVoice_Filter_Release:
+                    SetVoiceFilterRelease((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
+                    break;
+
+                case SynthesizerCommandType.SetVoice_Filter_ADSR_Amount:
+                    SetVoiceFilterAdsrAmount((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
                     break;
 
                 case SynthesizerCommandType.Voice_AddOscillator:
@@ -645,7 +679,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             }
         }
 
-        public StateVariableLPF CreateDefaultLPF()
+        public SVF CreateDefaultLPF()
         {
             return CreateDefaultLPF(SampleRate);
         }
@@ -662,7 +696,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         private static void SetVoiceMix(Voice voice, double mix)
         {
-            voice.Mix = MixRange.Clamp(mix);
+            voice.Mix = ClampMix(mix);
         }
 
         private static void SetVoiceAttack(Voice voice, double attack)
@@ -685,40 +719,115 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             voice.Adsr.ReleaseSeconds = ReleaseRange.Clamp(release);
         }
 
-        private static void SetVoiceLPFBaseCutoff(Voice voice, double baseCutoff)
+        private static void SetVoiceFilterBaseCutoff(Voice voice, double baseCutoff)
         {
-            voice.LPF_BaseCutoff = LPF_BaseCutoffRange.Clamp(baseCutoff);
+            voice.Filter_BaseCutoff = Filter_BaseCutoffRange.Clamp(baseCutoff);
         }
 
-        private static void SetVoiceLPFResonance(Voice voice, double resonance)
+        private static void SetVoiceFilterResonance(Voice voice, double resonance)
         {
-            voice.LPF.Resonance = LPF_ResonanceRange.Clamp(resonance);
+            if (voice.Filter is null)
+            {
+                return;
+            }
+
+            voice.Filter.Resonance = ClampFilterResonance(resonance);
         }
 
-        private static void SetVoiceLPFAttack(Voice voice, double attack)
+        private static void SetVoiceFilterGain(Voice voice, double gain)
         {
-            voice.LPF_Adsr.AttackSeconds = AttackRange.Clamp(attack);
+            if (voice.Filter is null)
+            {
+                return;
+            }
+
+            voice.Filter.Gain = ClampFilterGain(gain);
         }
 
-        private static void SetVoiceLPFDecay(Voice voice, double decay)
+        private static void SetVoiceFilterMix(Voice voice, UnmanagedNullable<SVFMix> mix)
         {
-            voice.LPF_Adsr.DecaySeconds = DecayRange.Clamp(decay);
+            if (mix.HasValue)
+            {
+                mix = ClampSVFMix(mix.Value);
+            }
+
+            voice.FilterMix = mix;
         }
 
-        private static void SetVoiceLPFSustain(Voice voice, double sustain)
+        private static void SetVoiceFilterMixLow(Voice voice, double low)
         {
-            voice.LPF_Adsr.SustainLevel = SustainRange.Clamp(sustain);
+            if (voice.FilterMix.HasValue)
+            {
+                low = ClampFilterMix(low);
+
+                voice.FilterMix.RefWritableUnsafe().Low = low;
+            }
         }
 
-        private static void SetVoiceLPFRelease(Voice voice, double release)
+        private static void SetVoiceFilterMixHigh(Voice voice, double high)
         {
-            voice.LPF_Adsr.ReleaseSeconds = ReleaseRange.Clamp(release);
+            if (voice.FilterMix.HasValue)
+            {
+                high = ClampFilterMix(high);
+
+                voice.FilterMix.RefWritableUnsafe().High = high;
+            }
+        }
+
+        private static void SetVoiceFilterMixBand(Voice voice, double band)
+        {
+            if (voice.FilterMix.HasValue)
+            {
+                band = ClampFilterMix(band);
+
+                voice.FilterMix.RefWritableUnsafe().Band = band;
+            }
+        }
+
+        private static void SetVoiceFilterAttack(Voice voice, double attack)
+        {
+            if (voice.Filter_Adsr is null)
+            {
+                return;
+            }
+
+            voice.Filter_Adsr.AttackSeconds = AttackRange.Clamp(attack);
+        }
+
+        private static void SetVoiceFilterDecay(Voice voice, double decay)
+        {
+            if (voice.Filter_Adsr is null)
+            {
+                return;
+            }
+
+            voice.Filter_Adsr.DecaySeconds = DecayRange.Clamp(decay);
+        }
+
+        private static void SetVoiceFilterSustain(Voice voice, double sustain)
+        {
+            if (voice.Filter_Adsr is null)
+            {
+                return;
+            }
+
+            voice.Filter_Adsr.SustainLevel = SustainRange.Clamp(sustain);
+        }
+
+        private static void SetVoiceFilterRelease(Voice voice, double release)
+        {
+            if (voice.Filter_Adsr is null)
+            {
+                return;
+            }
+
+            voice.Filter_Adsr.ReleaseSeconds = ReleaseRange.Clamp(release);
         }
 
         // TODO: Implement range.
-        private static void SetVoiceLPFAdsrAmount(Voice voice, double amount)
+        private static void SetVoiceFilterAdsrAmount(Voice voice, double amount)
         {
-            voice.LPF_AdsrAmount = LPF_AdsrAmountRange.Clamp(amount);
+            voice.Filter_AdsrAmount = Filter_AdsrAmountRange.Clamp(amount);
         }
 
         private static void AddVoiceOscillator(Voice voice, Oscillator oscillator)
@@ -775,8 +884,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             voice.IsOff = true;
 
             voice.Adsr.Reset();
-            voice.LPF_Adsr?.Reset();
-            voice.LPF?.Reset();
+            voice.Filter_Adsr?.Reset();
+            voice.Filter?.Reset();
 
             ResetOscillators(voice);
         }
@@ -819,7 +928,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
             ValidateAdsrEnvelope(voice.Adsr);
 
-            ValidateVoiceLPF(voice);
+            ValidateVoiceFilter(voice);
 
             ValidateOscillators(voice.Oscillators, voice.CenterFrequency);
         }
@@ -831,30 +940,87 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                 return;
             }
 
+            ClampAdsrEnvelope(adsr);
+        }
+
+        public static void ClampAdsrEnvelope(AdsrEnvelope adsr)
+        {
             adsr.AttackSeconds = AttackRange.Clamp(adsr.AttackSeconds);
             adsr.DecaySeconds = AttackRange.Clamp(adsr.DecaySeconds);
             adsr.SustainLevel = SustainRange.Clamp(adsr.SustainLevel);
             adsr.ReleaseSeconds = ReleaseRange.Clamp(adsr.ReleaseSeconds);
         }
 
-        // Validates Voice.LPF_BaseCutoff, Voice.LPF.Resonance, Voice.LPF_Adsr, and Voice.LPF_AdsrAmount.
-        public static void ValidateVoiceLPF(Voice voice)
+        // Validates Voice.Filter_BaseCutoff, everything in Voice.Filter, Voice.Filter_Adsr, Voice.Filter_AdsrAmount, and Voice.FilterMix.
+        public static void ValidateVoiceFilter(Voice voice)
         {
             if (voice is null)
             {
                 return;
             }
 
-            voice.LPF_BaseCutoff = LPF_BaseCutoffRange.Clamp(voice.LPF_BaseCutoff);
+            voice.Filter_BaseCutoff = Filter_BaseCutoffRange.Clamp(voice.Filter_BaseCutoff);
 
-            if (voice.LPF is not null)
+            // The filter's cutoff itself is set dynamically because of the filter's ADSR,
+            // and the base cutoff is stored in Voice,
+            // so I don't really need to clamp the filter's cutoff here.
+
+            if (voice.Filter is not null)
             {
-                voice.LPF.Resonance = LPF_ResonanceRange.Clamp(voice.LPF.Resonance);
+                voice.Filter.Resonance = ClampFilterResonance(voice.Filter.Resonance);
+
+                voice.Filter.Gain = ClampFilterGain(voice.Filter.Gain);
             }
 
-            ValidateAdsrEnvelope(voice.LPF_Adsr);
+            ValidateVoiceFilterMix(voice);
 
-            voice.LPF_AdsrAmount = LPF_AdsrAmountRange.Clamp(voice.LPF_AdsrAmount);
+            ValidateAdsrEnvelope(voice.Filter_Adsr);
+
+            voice.Filter_AdsrAmount = Filter_AdsrAmountRange.Clamp(voice.Filter_AdsrAmount);
+        }
+
+        public static void ValidateVoiceFilterMix(Voice voice)
+        {
+            if (!voice.FilterMix.HasValue)
+            {
+                return;
+            }
+
+            voice.FilterMix = ClampSVFMix(voice.FilterMix.Value);
+        }
+
+        public static SVFMix ClampSVFMix(SVFMix mix)
+        {
+            ClampSVFMix(ref mix);
+
+            return mix;
+        }
+
+        public static void ClampSVFMix(ref SVFMix mix)
+        {
+            mix.Low = ClampFilterMix(mix.Low);
+            mix.High = ClampFilterMix(mix.High);
+            mix.Band = ClampFilterMix(mix.Band);
+        }
+
+        public static double ClampMix(double mix)
+        {
+            return MixRange.Clamp(mix);
+        }
+
+        public static double ClampFilterResonance(double gain)
+        {
+            return Filter_ResonanceRange.Clamp(gain);
+        }
+
+        public static double ClampFilterGain(double gain)
+        {
+            return Filter_GainRange.Clamp(gain);
+        }
+
+        public static double ClampFilterMix(double mix)
+        {
+            return Filter_MixRange.Clamp(mix);
         }
 
         // Also sets the center frequency.
@@ -899,9 +1065,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             };
         }
 
-        public static StateVariableLPF CreateDefaultLPF(int sampleRate)
+        public static SVF CreateDefaultLPF(int sampleRate)
         {
-            return new StateVariableLPF(cutoff: DEFAULT_LPFBASE_CUTOFF, resonance: DEFAULT_LPF_RESONANCE, sampleRate: sampleRate);
+            return new SVF(cutoff: DEFAULT_FILTER_BASE_CUTOFF, 
+                           resonance: DEFAULT_FILTER_RESONANCE, 
+                           gain: DEFAULT_FILTER_GAIN,
+                           sampleRate: sampleRate);
         }
     }
 }

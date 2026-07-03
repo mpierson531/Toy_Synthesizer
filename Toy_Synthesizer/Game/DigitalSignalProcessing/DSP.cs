@@ -24,7 +24,7 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing
         public const bool DEFAULT_IS_STEREO = true;
 
         public const double MIN_GLOBAL_GAIN = 0.0;
-        public const double MAX_GLOBAL_GAIN = 5.0;
+        public const double MAX_GLOBAL_GAIN = 10.0;
 
         public const double MIN_MASTER_VOLUME = 0.0;
         public const double MAX_MASTER_VOLUME = 1.0;

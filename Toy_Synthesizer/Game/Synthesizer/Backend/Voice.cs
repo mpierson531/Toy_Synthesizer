@@ -19,11 +19,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
     {
         public static Voice FromMidi(MidiNote note, 
                                      double mix = PolyphonicSynthesizer.DEFAULT_MIX,
-                                     StateVariableLPF stateVariableLPF = null,
+                                     SVF filter = null,
+                                     UnmanagedNullable<SVFMix> filterMix = default,
                                      AdsrEnvelope adsr = null,
                                      AdsrEnvelope lpfAdsr = null,
-                                     double lpfBaseCutoff = PolyphonicSynthesizer.DEFAULT_LPFBASE_CUTOFF,
-                                     double lpfAdsrAmount = PolyphonicSynthesizer.DEFAULT_LPF_ADSR_AMOUNT,
+                                     double lpfBaseCutoff = PolyphonicSynthesizer.DEFAULT_FILTER_BASE_CUTOFF,
+                                     double lpfAdsrAmount = PolyphonicSynthesizer.DEFAULT_FILTER_ADSR_AMOUNT,
                                      ViewableList<Oscillator> oscillators = null)
         {
             return new Voice
@@ -31,11 +32,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                 Name = note.ToString(),
                 Mix = mix,
                 CenterFrequency = MidiUtils.GetFrequency(note),
-                LPF = stateVariableLPF,
+                Filter = filter,
+                FilterMix = filterMix,
                 Adsr = adsr,
-                LPF_Adsr = lpfAdsr,
-                LPF_BaseCutoff = lpfBaseCutoff,
-                LPF_AdsrAmount = lpfAdsrAmount,
+                Filter_Adsr = lpfAdsr,
+                Filter_BaseCutoff = lpfBaseCutoff,
+                Filter_AdsrAmount = lpfAdsrAmount,
                 Oscillators = oscillators
             };
         }
@@ -47,11 +49,12 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                 Name = TextUtils.EmptyString,
                 Mix = PolyphonicSynthesizer.DEFAULT_MIX,
                 CenterFrequency = 0.0,
-                LPF = null,
+                Filter = null,
+                FilterMix = default,
                 Adsr = new AdsrEnvelope(sampleRate),
-                LPF_Adsr = new AdsrEnvelope(sampleRate),
-                LPF_BaseCutoff = PolyphonicSynthesizer.DEFAULT_LPFBASE_CUTOFF,
-                LPF_AdsrAmount = PolyphonicSynthesizer.DEFAULT_LPF_ADSR_AMOUNT,
+                Filter_Adsr = new AdsrEnvelope(sampleRate),
+                Filter_BaseCutoff = PolyphonicSynthesizer.DEFAULT_FILTER_BASE_CUTOFF,
+                Filter_AdsrAmount = PolyphonicSynthesizer.DEFAULT_FILTER_ADSR_AMOUNT,
                 Oscillators = null
             };
         }
@@ -81,10 +84,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         public double Mix = PolyphonicSynthesizer.DEFAULT_MIX;
 
         public AdsrEnvelope Adsr;
-        public StateVariableLPF LPF;
-        public double LPF_BaseCutoff = PolyphonicSynthesizer.DEFAULT_LPFBASE_CUTOFF;
-        public AdsrEnvelope LPF_Adsr;
-        public double LPF_AdsrAmount = PolyphonicSynthesizer.DEFAULT_LPF_ADSR_AMOUNT;
+        public SVF Filter;
+        public UnmanagedNullable<SVFMix> FilterMix;
+        public double Filter_BaseCutoff = PolyphonicSynthesizer.DEFAULT_FILTER_BASE_CUTOFF;
+        public AdsrEnvelope Filter_Adsr;
+        public double Filter_AdsrAmount = PolyphonicSynthesizer.DEFAULT_FILTER_ADSR_AMOUNT;
         public ViewableList<Oscillator> Oscillators;
         public bool IsOff;
 
@@ -108,13 +112,14 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
                 Mix = voice.Mix,
 
-                LPF = Copyables.Cast<StateVariableLPF>(voice.LPF, deepCopy),
+                Filter = Copyables.Cast<SVF>(voice.Filter, deepCopy),
+                FilterMix = voice.FilterMix,
 
                 Adsr = Copyables.Cast<AdsrEnvelope>(voice.Adsr, deepCopy),
-                LPF_Adsr = Copyables.Cast<AdsrEnvelope>(voice.LPF_Adsr, deepCopy),
+                Filter_Adsr = Copyables.Cast<AdsrEnvelope>(voice.Filter_Adsr, deepCopy),
 
-                LPF_BaseCutoff = voice.LPF_BaseCutoff,
-                LPF_AdsrAmount = voice.LPF_AdsrAmount,
+                Filter_BaseCutoff = voice.Filter_BaseCutoff,
+                Filter_AdsrAmount = voice.Filter_AdsrAmount,
 
                 Oscillators = Copyables.Cast<ViewableList<Oscillator>>(voice.Oscillators, deepCopy),
 
