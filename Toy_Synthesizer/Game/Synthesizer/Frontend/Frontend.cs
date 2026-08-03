@@ -23,7 +23,7 @@ using Toy_Synthesizer.Game.UI;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 {
-    // TODO: Implement adding/removing voices.
+    // TODO: Implement global voice oscillators UI and filter UI
     public class Frontend
     {
         private readonly UIXmlParser uiXmlParser;

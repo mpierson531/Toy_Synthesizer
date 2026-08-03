@@ -1992,7 +1992,9 @@ namespace Toy_Synthesizer.Game.UI
                                        extraSizePadding: Vec2fValue.NormalizedMin(0.05f),
                                        retreatMode: uxData.RetreatMode)
             {
-                Style = style
+                Style = style,
+
+                RenderClipped = true
             };
 
             drawer.CurrentRenderData = drawer.Style.RenderData;
@@ -2263,7 +2265,7 @@ namespace Toy_Synthesizer.Game.UI
                 NormalizedChildStartPosition = new Vec2f(0.2f, 1.5f),
                 NormalizedChildSize = Vec2f.One,
                 NormalizedAdditionalSpacing = new Vec2f(0f, 0.3f),
-                NormalizedRetreatAmount = new Vec2f(-0.5f),
+                NormalizedRetreatAmount = Vec2f.Zero, // With the Drawer properly clipping rendering, I think it looks better like this
                 RetreatMode = GeoLib.GeoGraphics.UI.Widgets.Drawer.RetreatFunction.RelativeToDrawer,
 
                 ShowDuration = 0.2f,

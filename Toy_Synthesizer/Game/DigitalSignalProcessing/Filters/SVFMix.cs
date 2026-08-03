@@ -4,6 +4,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
+using GeoLib.GeoUtils;
+
 namespace Toy_Synthesizer.Game.DigitalSignalProcessing.Filters
 {
     public struct SVFMix
@@ -48,6 +50,23 @@ namespace Toy_Synthesizer.Game.DigitalSignalProcessing.Filters
             this.Low = low;
             this.High = high;
             this.Band = band;
+        }
+
+        public readonly void Deconstruct(out double low, out double high, out double band)
+        {
+            low = this.Low;
+            high = this.High;
+            band = this.Band;
+        }
+
+        public static void DeconstructOrDefault(Nullable<SVFMix> mixNullable, out double low, out double high, out double band)
+        {
+            (low, high, band) = !mixNullable.HasValue ? Default : mixNullable.Value;
+        }
+
+        public static void DeconstructOrDefault(UnmanagedNullable<SVFMix> mixNullable, out double low, out double high, out double band)
+        {
+            (low, high, band) = !mixNullable.HasValue ? Default : mixNullable.Value;
         }
     }
 }

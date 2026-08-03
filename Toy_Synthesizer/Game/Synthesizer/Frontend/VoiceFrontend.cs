@@ -649,8 +649,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend
 
                     MidiNote midiNote = (MidiNote)noteValue;
 
-                    SVF filter = synthesizer.CreateDefaultLPF();
-                    SVFMix filterMix = SVFMix.LowPass();
+                    SVF filter = null;
+                    UnmanagedNullable<SVFMix> filterMix = default;
 
                     Voice voice = Voice.FromMidi(midiNote, filter: filter, filterMix: filterMix);
 

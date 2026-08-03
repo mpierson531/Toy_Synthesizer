@@ -19,15 +19,17 @@ using GeoLib.GeoShapes;
 using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
-using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
-using Microsoft.Xna.Framework.Input;
-using Toy_Synthesizer.Game.Synthesizer.Backend;
 using Toy_Synthesizer.Game.UI;
+using Toy_Synthesizer.Game.Synthesizer.Backend;
+using Toy_Synthesizer.Game.DigitalSignalProcessing;
+using Toy_Synthesizer.Game.DigitalSignalProcessing.Filters;
+
+using Microsoft.Xna.Framework.Input;
 
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
     // TODO: When adding/removing oscillators and keybindings, figure out why laying out doesn't work right unless I explicitly Layout (the drawer widgets should be making it work)
+    // TODO: Continue implementing filter UI
     public class VoiceGroup : ScrollPane
     {
         internal Game game;
@@ -39,6 +41,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private Voice voice;
 
         private UIXmlParser uiXmlParser;
+
+        private FilterProvider filterProvider;
 
         public Voice Voice
         {
@@ -101,6 +105,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private Button removeButton;
         private LabelTooltip removeButtonTooltip;
 
+        private Drawer filterDrawer;
+        private FilterControlGroup filterControlGroup;
+        private Button addFilterButton; // Only one filter is supported per-voice; this is just for if there is no filter.
+
         private readonly ViewableList<KeybindingGroupWidgets> keybindingGroupWidgets;
 
         private Drawer keybindingsDrawer;
@@ -132,6 +140,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             this.game = game;
 
             this.voiceFrontend = voiceFrontend;
+
+            filterProvider = new FilterProvider(this);
 
             keybindingGroupWidgets = new ViewableList<KeybindingGroupWidgets>();
 
@@ -177,6 +187,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             uiXmlParser.AddTypeFactory(new VoiceMixControlGroupFactory());
             uiXmlParser.AddTypeFactory(new VoiceOscillatorControlGroupFactory());
+            uiXmlParser.AddTypeFactory(new FilterControlGroup.FilterControlGroupFactory());
             uiXmlParser.AddTypeFactory(new VoiceKeybindingGroupFactory());
 
             string uiXml = GetUIXml();
@@ -521,6 +532,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             InitOscillatorGroups();
 
+            InitFilterUI(Voice.Filter);
+
             InitKeybindingGroups();
         }
 
@@ -546,6 +559,136 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
                 oscillatorControlGroup.UpdateFromVoice();
             }, start: 0, end: Count);
+        }
+
+        /*private void InitFilterUI()
+        {
+            if (Voice is null || Voice.Filter is null)
+            {
+                ClearFilterUI();
+
+                return;
+            }
+
+            GeoDebug.Assert((filterDrawer is null && filterControlGroup is null) || (filterDrawer is not null && filterControlGroup is not null));
+
+            if (filterDrawer is null)
+            {
+                string filterUIXml = GetFilterUIXml();
+
+                uiXmlParser.Parse(filterUIXml, rootParent: this);
+            }
+
+            filterDrawer = FindAsByNameDeepSearch<Drawer>(FilterDrawerName);
+            filterControlGroup = FindAsByNameDeepSearch<FilterControlGroup>(FilterControlGroupName);
+            addFilterButton = FindAsByNameDeepSearch<Button>(AddFilterButtonName);
+
+            filterControlGroup?.Init(Voice);
+        }
+
+        private void ClearFilterUI()
+        {
+            GeoDebug.Assert((filterDrawer is null && filterControlGroup is null) || (filterDrawer is not null && filterControlGroup is not null));
+
+            if (filterDrawer is not null)
+            {
+                GeoDebug.Assert(filterControlGroup is not null);
+
+                RemoveChild(filterDrawer);
+
+                filterDrawer = null;
+
+                filterControlGroup = null;
+            }
+        }*/
+
+        private void InitFilterUI(SVF filter, Vec2f? drawerStartPositionPercent = null)
+        {
+            GeoDebug.Assert
+            (
+                (filterDrawer is null && (filterControlGroup is null && addFilterButton is null)) 
+                || (filterDrawer is not null && (filterControlGroup is not null || addFilterButton is not null))
+            );
+
+            if (filterDrawer is null)
+            {
+                string filterUIXml = GetFilterUIXml(filter, drawerStartPositionPercent: drawerStartPositionPercent);
+
+                uiXmlParser.Parse(filterUIXml, rootParent: this);
+            }
+
+            filterDrawer = FindAsByNameDeepSearch<Drawer>(FilterDrawerName);
+            filterControlGroup = FindAsByNameDeepSearch<FilterControlGroup>(FilterControlGroupName);
+            addFilterButton = FindAsByNameDeepSearch<Button>(AddFilterButtonName);
+
+            if (addFilterButton is not null)
+            {
+                addFilterButton.OnClick += delegate
+                {
+                    Vec2f currentScrollOffset = CurrentOffset;
+
+                    ScrollBy(currentScrollOffset);
+
+                    if (!Adapters.TryFindFirstOfType<PreciseGroupLayoutAdapter>(out PreciseGroupLayoutAdapter layoutAdapter))
+                    {
+                        throw new InvalidOperationException("layoutAdapter was null. This should never be reached!");
+                    }
+
+                    if (!layoutAdapter.TryGetNormalizedBounds(filterDrawer, out AABB currentNormalizedDrawerBounds))
+                    {
+                        throw new InvalidOperationException("Could not get bounds for filterDrawer. This should never be reached!");
+                    }
+
+                    Vec2f drawerPositionPercent = GeoMath.ScalarToPercent(currentNormalizedDrawerBounds.Position);
+
+                    ClearFilterUI();
+
+                    SVF newVoiceFilter = game.Synthesizer.CreateDefaultLPF();
+                    SVFMix newVoiceMix = SVFMix.LowPass();
+
+                    filterProvider.SetFilter(newVoiceFilter);
+                    filterProvider.SetFilterBaseCutoff(Voice.Filter_BaseCutoff);
+                    filterProvider.SetMix(newVoiceMix);
+
+                    InitFilterUI(newVoiceFilter, drawerStartPositionPercent: drawerPositionPercent);
+
+                    filterDrawer.Expand(animate: false);
+
+                    ScrollBy(-currentScrollOffset);
+                };
+            }
+
+            filterControlGroup?.Init(filterProvider);
+        }
+
+        private void ClearFilterUI()
+        {
+            GeoDebug.Assert
+            (
+                (filterDrawer is null && (filterControlGroup is null && addFilterButton is null)) 
+                || (filterDrawer is not null && (filterControlGroup is not null || addFilterButton is not null))
+            );
+
+            if (filterDrawer is not null)
+            {
+                GeoDebug.Assert(filterControlGroup is not null || addFilterButton is not null);
+
+                if (filterDrawer.IsExpanded)
+                {
+                    filterDrawer.Collapse(animate: false);
+                }
+
+                RemoveChild(filterDrawer);
+
+                filterDrawer = null;
+
+                filterControlGroup = null;
+            }
+
+            if (addFilterButton is not null)
+            {
+                addFilterButton = null;
+            }
         }
 
         private void InitKeybindingGroups()
@@ -798,7 +941,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
                  Name=""{AddOscillatorButtonName}""/>
     </Drawer>
 
-    <Drawer Position=""(5%, 84.5%)"" 
+<!-- Keybindings !-->
+
+    <Drawer Position=""(5%, 100.75%)"" 
             Size=""(30%, 11%)"" 
             CoverText=""Keybindings""
             RenderTextPosition=""(-2.5%, 0%)""
@@ -848,6 +993,76 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             </Layout>";
         }
+
+        private string GetFilterUIXml(SVF filter, Vec2f? drawerStartPositionPercent = null)
+        {
+            // If adding a filter, drawerStartPositionPercent should have a value.
+            // If it doesn't and a drawer before it is expanded, and the scroll offset is not zero, the position will be wrong.
+
+            Vec2f defaultPosition = new Vec2f(5f, 84.5f);
+
+            if (!drawerStartPositionPercent.HasValue)
+            {
+                drawerStartPositionPercent = defaultPosition;
+            }
+
+            Vec2f drawerPositionPercent = drawerStartPositionPercent.Value;
+
+            if (filter is null)
+            {
+                return
+                $@"<Layout>
+                <Drawer Position=""({drawerPositionPercent.X}%, {drawerPositionPercent.Y}%)""
+                    Size=""(30%, 11%)"" 
+                    CoverText=""Filter""
+                    RenderTextPosition=""(-2.5%, 0%)""
+                    Name=""{FilterDrawerName}"">
+            
+                <TextButton
+                    Position=""({drawerBeginX_Percent}%, {drawerBeginY_Percent}%)"" 
+                    Size=""(100%, 100%)""
+                 Text=""Add Filter""
+                 Alignment=""Center""
+                 FitText=""false""
+                 Name=""{AddFilterButtonName}""/>
+                </Drawer>
+                </Layout>";
+            }
+
+            return
+                $@"<Layout>
+                <Drawer Position=""({drawerPositionPercent.X}%, {drawerPositionPercent.Y}%)""
+                    Size=""(30%, 11%)"" 
+                    CoverText=""Filter""
+                    RenderTextPosition=""(-2.5%, 0%)""
+                    Name=""{FilterDrawerName}"">
+            
+                <FilterControlGroup
+                    Position=""({drawerBeginX_Percent}%, {drawerBeginY_Percent}%)"" 
+                    Size=""(200%, 515%)""
+                    Name=""{FilterControlGroupName}""/>
+                </Drawer>
+                </Layout>";
+        }
+
+        /*private string GetFilterUIXml()
+        {
+            return
+                $@"<Layout>
+                <Drawer Position=""(5%, 84.5%)"" 
+                    Size=""(30%, 11%)"" 
+                    CoverText=""Filter""
+                    RenderTextPosition=""(-2.5%, 0%)""
+                    Name=""{FilterDrawerName}"">
+            
+                <FilterControlGroup
+                    Position=""({drawerBeginX_Percent}%, {drawerBeginY_Percent}%)"" 
+                    Size=""(200%, 515%)""
+                    FilterType=""LowPass""
+                    Name=""{FilterControlGroupName}""/>
+                </Drawer>
+                </Layout>";
+        }*/
 
         private string GetKeybindingsUIXml()
         {
@@ -977,6 +1192,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private const string RemoveButtonName = "RemoveButton";
 
+        private const string FilterDrawerName = "FilterDrawer";
+        private const string FilterControlGroupName = "FilterControlGroup";
+        private const string AddFilterButtonName = "AddFilterButton";
+
         private const string KeybindingsDrawerName = "KeybindingsDrawer";
         private const string AddKeybindingButtonName = "AddKeybindingButton";
 
@@ -1038,6 +1257,183 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             public VoiceKeybindingGroup Group;
             public TextButton KeyComboModeButton;
             public KeyBinding.KeyComboMode KeyComboMode;
+        }
+
+        private sealed class FilterProvider : ISVFProvider, ISVFMixProvider
+        {
+            private readonly VoiceGroup voiceGroup;
+            private SVF filter;
+            private double filterBaseCutoff;
+            private UnmanagedNullable<SVFMix> mix;
+
+            private Voice Voice
+            {
+                get => voiceGroup.Voice;
+            }
+
+            public FilterProvider(VoiceGroup voiceGroup)
+            {
+                if (voiceGroup is null)
+                {
+                    throw new InvalidOperationException("voiceGroup was null. This should never be reached!");
+                }
+
+                this.voiceGroup = voiceGroup;
+            }
+
+            public ISVFMixProvider MixProvider
+            {
+                get => this;
+            }
+
+            public SVF GetFilter()
+            {
+                return filter;
+            }
+
+            public void SetFilter(SVF filter)
+            {
+                this.filter = filter.Copy(deepCopy: true);
+
+                SendDSPSynthesizerCommand(SynthesizerCommands.SetVoiceFilter(Voice, filter));
+            }
+
+            public double GetFilterBaseCutoff()
+            {
+                return filterBaseCutoff;
+            }
+
+            public void SetFilterBaseCutoff(double baseCutoff)
+            {
+                this.filterBaseCutoff = baseCutoff;
+
+                SendDSPSynthesizerCommand(SynthesizerCommands.SetVoiceFilterBaseCutoff(Voice, baseCutoff));
+            }
+
+            public double GetFilterResonance()
+            {
+                if (filter is null)
+                {
+                    return PolyphonicSynthesizer.DEFAULT_FILTER_RESONANCE;
+                }
+
+                return filter.Resonance;
+            }
+
+            public void SetFilterResonance(double resonance)
+            {
+                filter.Resonance = resonance;
+
+                SendDSPSynthesizerCommand(SynthesizerCommands.SetVoiceFilterResonance(Voice, resonance));
+            }
+
+            public double GetFilterGain()
+            {
+                if (filter is null)
+                {
+                    return PolyphonicSynthesizer.DEFAULT_FILTER_GAIN;
+                }
+
+                return filter.Gain;
+            }
+
+            public void SetFilterGain(double gain)
+            {
+                filter.Gain = gain;
+
+                SendDSPSynthesizerCommand(SynthesizerCommands.SetVoiceFilterGain(Voice, gain));
+            }
+
+            public UnmanagedNullable<SVFMix> GetMix()
+            {
+                if (!mix.HasValue)
+                {
+                    return SVFMix.Default;
+                }
+
+                return mix.Value;
+            }
+
+            public void SetMix(UnmanagedNullable<SVFMix> mix)
+            {
+                this.mix = mix;
+
+                SendDSPSynthesizerCommand(SynthesizerCommands.SetVoiceFilterMix(Voice, mix));
+            }
+
+            public double GetLowMix()
+            {
+                if (!mix.HasValue)
+                {
+                    return SVFMix.DEFAULT_LOW_MIX;
+                }
+
+                return mix.Value.Low;
+            }
+
+            public void SetLowMix(double lowMix)
+            {
+                if (mix.HasValue)
+                {
+                    SVFMix tempMix = mix.Value;
+                    tempMix.Low = lowMix;
+
+                    mix = tempMix;
+                }
+
+                SendDSPSynthesizerCommand(SynthesizerCommands.SetVoiceFilterMixLow(Voice, lowMix));
+            }
+
+            public double GetHighMix()
+            {
+                if (!mix.HasValue)
+                {
+                    return SVFMix.DEFAULT_HIGH_MIX;
+                }
+
+                return mix.Value.High;
+            }
+
+            public void SetHighMix(double highMix)
+            {
+                if (mix.HasValue)
+                {
+                    SVFMix tempMix = mix.Value;
+                    tempMix.High = highMix;
+
+                    mix = tempMix;
+                }
+
+                SendDSPSynthesizerCommand(SynthesizerCommands.SetVoiceFilterMixHigh(Voice, highMix));
+            }
+
+            public double GetBandMix()
+            {
+                if (!mix.HasValue)
+                {
+                    return SVFMix.DEFAULT_BAND_MIX;
+                }
+
+                return mix.Value.Band;
+            }
+
+            public void SetBandMix(double bandMix)
+            {
+                if (mix.HasValue)
+                {
+                    SVFMix tempMix = mix.Value;
+                    tempMix.Band = bandMix;
+
+                    mix = tempMix;
+                }
+
+                SendDSPSynthesizerCommand(SynthesizerCommands.SetVoiceFilterMixBand(Voice, bandMix));
+            }
+
+            private void SendDSPSynthesizerCommand(AudioSourceCommand command)
+            {
+                voiceGroup.game.DSP.SendAudioSourceCommand(voiceGroup.game.Synthesizer, command);
+            }
         }
     }
 }

@@ -33,6 +33,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         SetVoice_Sustain,
         SetVoice_Release,
 
+        SetVoice_Filter,
         SetVoice_Filter_BaseCutoff,
         SetVoice_Filter_Resonance,
         SetVoice_Filter_Gain,

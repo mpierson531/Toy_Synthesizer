@@ -24,8 +24,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         public const double MIN_CENTER_FREQUENCY = 0.0;
         public const double MAX_CENTER_FREQUENCY = 32000.0;
 
-        public const double DEFAULT_FILTER_BASE_CUTOFF = 2000;
-        public const double DEFAULT_FILTER_ADSR_AMOUNT = 3000.0;
+        public const double DEFAULT_FILTER_BASE_CUTOFF = 5000;
+        public const double DEFAULT_FILTER_ADSR_AMOUNT = 0.0;
         public const double DEFAULT_FILTER_RESONANCE = 0.25;
         public const double DEFAULT_FILTER_GAIN = 1.0;
 
@@ -605,6 +605,10 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
                     SetVoiceRelease((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
                     break;
 
+                case SynthesizerCommandType.SetVoice_Filter:
+                    SetVoiceFilter((Voice)command.ObjectValue, (SVF)command.ObjectValue2);
+                    break;
+
                 case SynthesizerCommandType.SetVoice_Filter_BaseCutoff:
                     SetVoiceFilterBaseCutoff((Voice)command.ObjectValue, command.ValueStorage.Read<double>());
                     break;
@@ -717,6 +721,13 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
         private static void SetVoiceRelease(Voice voice, double release)
         {
             voice.Adsr.ReleaseSeconds = ReleaseRange.Clamp(release);
+        }
+
+        private static void SetVoiceFilter(Voice voice, SVF filter)
+        {
+            ValidateFilter(filter);
+
+            voice.Filter = filter;
         }
 
         private static void SetVoiceFilterBaseCutoff(Voice voice, double baseCutoff)
@@ -967,9 +978,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
             if (voice.Filter is not null)
             {
-                voice.Filter.Resonance = ClampFilterResonance(voice.Filter.Resonance);
-
-                voice.Filter.Gain = ClampFilterGain(voice.Filter.Gain);
+                ValidateFilter(voice.Filter);
             }
 
             ValidateVoiceFilterMix(voice);
@@ -977,6 +986,13 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
             ValidateAdsrEnvelope(voice.Filter_Adsr);
 
             voice.Filter_AdsrAmount = Filter_AdsrAmountRange.Clamp(voice.Filter_AdsrAmount);
+        }
+
+        public static void ValidateFilter(SVF filter)
+        {
+            filter.Resonance = ClampFilterResonance(filter.Resonance);
+
+            filter.Gain = ClampFilterGain(filter.Gain);
         }
 
         public static void ValidateVoiceFilterMix(Voice voice)

@@ -93,6 +93,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Backend
 
         // Voice Filter commands
 
+        public static AudioSourceCommand SetVoiceFilter(Voice voice, SVF filter)
+        {
+            return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter, objectValue: voice, objectValue2: filter);
+        }
+
         public static AudioSourceCommand SetVoiceFilterBaseCutoff(Voice voice, double cutoff)
         {
             return AudioSourceCommand.Create((int)SynthesizerCommandType.SetVoice_Filter_BaseCutoff, valueStorage: RawValueStorage_64B.From(cutoff), objectValue: voice);
