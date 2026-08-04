@@ -22,11 +22,12 @@ using Toy_Synthesizer.Game.UI;
 namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 {
     // TODO: Implement usage of range in PolyphonicSynthesizer and implement command usage.
-    public class VoiceOscillatorControlGroup : GroupWidget
+    public class OscillatorControlGroup : GroupWidget
     {
-        private VoiceGroup parentVoiceGroup;
+        private DSP dsp;
+        private PolyphonicSynthesizer synthesizer;
 
-        internal Oscillator oscillator;
+        private Oscillator oscillator;
 
         private PropertyBindable<double> amplitudeProperty;
         private PropertyBindable<WaveformType> waveformTypeProperty;
@@ -48,11 +49,20 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         private Button removeButton;
         private LabelTooltip removeButtonTooltip;
 
-        public VoiceOscillatorControlGroup(Vec2f position, Vec2f size, UIManager uiManager)
+        public Oscillator Oscillator
+        {
+            get => oscillator;
+        }
+
+        public event Action<OscillatorControlGroup> RemoveButton_OnClick;
+
+        public OscillatorControlGroup(DSP dsp, PolyphonicSynthesizer synthesizer, Vec2f position, Vec2f size, UIManager uiManager)
             : base(position, size,
                    positionChildren: false,
                    sizeChildren: false)
         {
+            InitDSPAndSynthesizer(dsp, synthesizer);
+
             Adapters.Add(new PreciseGroupLayoutAdapter());
 
             InitPropertyBindables();
@@ -68,32 +78,29 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             InitWidgets(uiManager);
         }
 
-        protected override void ParentChanged(GroupWidget previousParent, GroupWidget newParent)
+        public void InitDSPAndSynthesizer(DSP dsp, PolyphonicSynthesizer synthesizer)
         {
-            base.ParentChanged(previousParent, newParent);
-
-            parentVoiceGroup = VoiceGroup.FindParentVoiceGroup(this);
-
-            if (newParent is not null && parentVoiceGroup is null)
-            {
-                throw new InvalidOperationException("No parent voice group found in hierarchy.");
-            }
+            this.dsp = dsp;
+            this.synthesizer = synthesizer;
         }
 
-        internal void UpdateFromVoice()
+        // This sets the oscillator and updates the UI from it.
+        public void SetOscillator(Oscillator oscillator)
         {
-            if (parentVoiceGroup is null || parentVoiceGroup.Voice is null)
-            {
-                return;
-            }
+            this.oscillator = oscillator;
 
-            amplitudeProperty.SetValueRaw(oscillator.Amplitude);
-            waveformTypeProperty.SetValueRaw(oscillator.WaveformType);
-            detuneCentsProperty.SetValueRaw(oscillator.DetuneCents);
+            UpdateFromOscillator();
+        }
 
-            amplitudeTextField.SetTextWithoutProperty(oscillator.Amplitude.ToString());
-            waveformTypeDropDown.SetValueWithoutProperty(oscillator.WaveformType);
-            detuneCentsTextField.SetTextWithoutProperty(oscillator.DetuneCents.ToString());
+        private void UpdateFromOscillator()
+        {
+            amplitudeProperty.SetValueRaw(Oscillator.Amplitude);
+            waveformTypeProperty.SetValueRaw(Oscillator.WaveformType);
+            detuneCentsProperty.SetValueRaw(Oscillator.DetuneCents);
+
+            amplitudeTextField.SetTextWithoutProperty(Oscillator.Amplitude.ToString());
+            waveformTypeDropDown.SetValueWithoutProperty(Oscillator.WaveformType);
+            detuneCentsTextField.SetTextWithoutProperty(Oscillator.DetuneCents.ToString());
         }
 
         private void InitPropertyBindables()
@@ -109,26 +116,17 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
         private void SetAmplitude(double amplitude)
         {
-            DSP dsp = parentVoiceGroup.game.DSP;
-            PolyphonicSynthesizer synthesizer = parentVoiceGroup.game.Synthesizer;
-
-            dsp.SendAudioSourceCommand(synthesizer, SynthesizerCommands.SetVoiceOscillatorAmplitude(oscillator, amplitude));
+            dsp.SendAudioSourceCommand(synthesizer, SynthesizerCommands.SetVoiceOscillatorAmplitude(Oscillator, amplitude));
         }
 
         private void SetWaveformType(WaveformType waveformType)
         {
-            DSP dsp = parentVoiceGroup.game.DSP;
-            PolyphonicSynthesizer synthesizer = parentVoiceGroup.game.Synthesizer;
-
-            dsp.SendAudioSourceCommand(synthesizer, SynthesizerCommands.SetVoiceOscillatorWaveformType(oscillator, waveformType));
+            dsp.SendAudioSourceCommand(synthesizer, SynthesizerCommands.SetVoiceOscillatorWaveformType(Oscillator, waveformType));
         }
 
         private void SetDetuneCents(double detuneCents)
         {
-            DSP dsp = parentVoiceGroup.game.DSP;
-            PolyphonicSynthesizer synthesizer = parentVoiceGroup.game.Synthesizer;
-
-            dsp.SendAudioSourceCommand(synthesizer, SynthesizerCommands.SetVoiceOscillatorDetuneCents(oscillator, detuneCents));
+            dsp.SendAudioSourceCommand(synthesizer, SynthesizerCommands.SetVoiceOscillatorDetuneCents(Oscillator, detuneCents));
         }
 
         private void InitWidgets(UIManager uiManager)
@@ -144,7 +142,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             removeButton = FindAsByNameDeepSearch<Button>(RemoveButtonName);
 
-            removeButton.OnClick += RemoveButton_OnClick;
+            removeButton.OnClick += RemoveButton_OnClick_Internal;
 
             removeButtonTooltip = uiManager.AddTextTooltip(removeButton, "Click to remove this oscillator");
 
@@ -153,9 +151,9 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             detuneCentsBinding = detuneCentsTextField.BindProperty_Number(detuneCentsProperty);
         }
 
-        private void RemoveButton_OnClick()
+        private void RemoveButton_OnClick_Internal()
         {
-            parentVoiceGroup.RemoveOscillatorAndGroup(this);
+            RemoveButton_OnClick?.Invoke(this);
 
             if (removeButtonTooltip?.IsShowing ?? false)
             {
@@ -234,8 +232,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             base.DisposeInternal(fromFinalizer);
 
-            parentVoiceGroup = null;
-
             oscillator = null;
 
             amplitudeProperty = null;
@@ -249,6 +245,8 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             amplitudeBinding = null;
             waveformTypeBinding = null;
             detuneCentsBinding = null;
+
+            RemoveButton_OnClick = null;
         }
 
         private const string AmplitudeLabelName = "AmplitudeLabel";

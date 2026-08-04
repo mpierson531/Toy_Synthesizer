@@ -20,6 +20,7 @@ using GeoLib.GeoUtils;
 using GeoLib.GeoUtils.Collections;
 
 using Toy_Synthesizer.Game.UI;
+using Toy_Synthesizer.Game.Synthesizer.Frontend.WidgetFactories;
 using Toy_Synthesizer.Game.Synthesizer.Backend;
 using Toy_Synthesizer.Game.DigitalSignalProcessing;
 using Toy_Synthesizer.Game.DigitalSignalProcessing.Filters;
@@ -186,7 +187,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             uiXmlParser = new UIXmlParser(uiManager.Game);
 
             uiXmlParser.AddTypeFactory(new VoiceMixControlGroupFactory());
-            uiXmlParser.AddTypeFactory(new VoiceOscillatorControlGroupFactory());
+            uiXmlParser.AddTypeFactory(new OscillatorControlGroupFactory());
             uiXmlParser.AddTypeFactory(new FilterControlGroup.FilterControlGroupFactory());
             uiXmlParser.AddTypeFactory(new VoiceKeybindingGroupFactory());
 
@@ -313,30 +314,30 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             string uiXml = GetOscillatorUIXml(drawerBeginY_Percent);
 
-            VoiceOscillatorControlGroup newOscillatorWidget = (VoiceOscillatorControlGroup)uiXmlParser.Parse(uiXml,
+            OscillatorControlGroup newOscillatorWidget = (OscillatorControlGroup)uiXmlParser.Parse(uiXml,
                                                                                                              rootParentBaseBounds: new AABB(oscillatorsDrawer.Position, oscillatorsDrawer.PreExpansionSize))[0];
 
             // May have to manually pass spacing for the drawer here, not sure yet.
 
             UIManager.ShiftDrawer_ChildAdded(oscillatorsDrawer, newOscillatorWidget);
 
-            newOscillatorWidget.oscillator = oscillator;
+            newOscillatorWidget.SetOscillator(oscillator);
 
             oscillatorsDrawer.AddChild(newOscillatorWidget);
 
             Layout();
 
-            newOscillatorWidget.UpdateFromVoice();
+            //newOscillatorWidget.UpdateFromVoice();
         }
 
-        internal void RemoveOscillatorAndGroup(VoiceOscillatorControlGroup oscillatorControlGroup)
+        private void RemoveOscillatorAndGroup(OscillatorControlGroup oscillatorControlGroup)
         {
             if (!oscillatorsDrawer.Contains(oscillatorControlGroup))
             {
                 throw new InvalidOperationException("Oscillator does not exist in UI.");
             }
 
-            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.RemoveVoiceOscillator(Voice, oscillatorControlGroup.oscillator));
+            game.DSP.SendAudioSourceCommand(game.Synthesizer, SynthesizerCommands.RemoveVoiceOscillator(Voice, oscillatorControlGroup.Oscillator));
 
             UIManager.ShiftDrawer_ChildRemoved(oscillatorsDrawer, oscillatorControlGroup);
 
@@ -541,7 +542,7 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
         {
             for (int index = 0; index < oscillatorsDrawer.Count; index++)
             {
-                if (oscillatorsDrawer[index] is VoiceOscillatorControlGroup)
+                if (oscillatorsDrawer[index] is OscillatorControlGroup)
                 {
                     oscillatorsDrawer.RemoveChildAt(index);
 
@@ -553,54 +554,11 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
 
             uiXmlParser.Parse(oscillatorsUIXml, rootParent: oscillatorsDrawer);
 
-            ForEachOfTypeWithIndex<VoiceOscillatorControlGroup>((index, oscillatorControlGroup) =>
+            ForEachOfTypeWithIndex<OscillatorControlGroup>((index, oscillatorControlGroup) =>
             {
-                oscillatorControlGroup.oscillator = Voice.Oscillators[index];
-
-                oscillatorControlGroup.UpdateFromVoice();
+                oscillatorControlGroup.SetOscillator(Voice.Oscillators[index]);
             }, start: 0, end: Count);
         }
-
-        /*private void InitFilterUI()
-        {
-            if (Voice is null || Voice.Filter is null)
-            {
-                ClearFilterUI();
-
-                return;
-            }
-
-            GeoDebug.Assert((filterDrawer is null && filterControlGroup is null) || (filterDrawer is not null && filterControlGroup is not null));
-
-            if (filterDrawer is null)
-            {
-                string filterUIXml = GetFilterUIXml();
-
-                uiXmlParser.Parse(filterUIXml, rootParent: this);
-            }
-
-            filterDrawer = FindAsByNameDeepSearch<Drawer>(FilterDrawerName);
-            filterControlGroup = FindAsByNameDeepSearch<FilterControlGroup>(FilterControlGroupName);
-            addFilterButton = FindAsByNameDeepSearch<Button>(AddFilterButtonName);
-
-            filterControlGroup?.Init(Voice);
-        }
-
-        private void ClearFilterUI()
-        {
-            GeoDebug.Assert((filterDrawer is null && filterControlGroup is null) || (filterDrawer is not null && filterControlGroup is not null));
-
-            if (filterDrawer is not null)
-            {
-                GeoDebug.Assert(filterControlGroup is not null);
-
-                RemoveChild(filterDrawer);
-
-                filterDrawer = null;
-
-                filterControlGroup = null;
-            }
-        }*/
 
         private void InitFilterUI(SVF filter, Vec2f? drawerStartPositionPercent = null)
         {
@@ -1214,20 +1172,6 @@ namespace Toy_Synthesizer.Game.Synthesizer.Frontend.Widgets
             {
                 return new VoiceMixControlGroup(position, size,
                                                 game: uiManager.Game);
-            }
-        }
-
-        private sealed class VoiceOscillatorControlGroupFactory : UIXmlParser.TypeFactory
-        {
-            public VoiceOscillatorControlGroupFactory() : base("VoiceOscillatorControlGroup")
-            {
-
-            }
-
-            public override Widget Create(Game game, UIManager uiManager, Vec2f position, Vec2f size, ViewableList<XAttribute> attributes)
-            {
-                return new VoiceOscillatorControlGroup(position, size,
-                                                       uiManager: uiManager);
             }
         }
 
